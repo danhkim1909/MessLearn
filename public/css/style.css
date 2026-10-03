@@ -1,0 +1,278 @@
+/* ==========================================================================
+   MESSLEARN DESIGN SYSTEM (Dựa trên skill ui-guidelines)
+   Màu chủ đạo: Sky Blue | Phong cách: Bo tròn mềm mại, tối giản, nhẹ nhàng
+   ========================================================================== */
+
+/* 1. Biến CSS & Hệ màu (Color Palette) */
+:root {
+    /* Chế độ Sáng (Light Mode) */
+    --color-primary: #0EA5E9;       /* Sky 600 - Xanh lam chủ đạo */
+    --color-primary-hover: #0284C7; /* Sky 700 - Hover đậm hơn */
+    --color-bg: #F8FAFC;            /* Slate 50 - Nền dịu mắt */
+    --color-surface: #FFFFFF;       /* Trắng tinh cho Card */
+    --color-text: #0F172A;          /* Slate 900 - Chữ chính */
+    --color-text-muted: #64748B;    /* Slate 500 - Chữ phụ */
+    --color-border: #E2E8F0;        /* Slate 200 - Viền mờ */
+
+    /* Màu thông báo & lỗi */
+    --color-danger: #EF4444;        /* Đỏ nổi bật */
+    --color-danger-bg: #FEF2F2;     /* Nền đỏ nhạt dịu mắt */
+    --color-danger-border: #FECACA; /* Viền đỏ nhẹ */
+    --color-success: #10B981;       /* Xanh lá thành công */
+    --color-success-bg: #ECFDF5;
+    --color-success-border: #A7F3D0;
+    
+    /* Quy tắc bo góc (Border Radius) */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 20px;              /* Bo góc lớn cho Card */
+    --radius-full: 9999px;          /* Bo tròn nút pill */
+
+    /* Bóng đổ mềm mại (Soft Drop Shadows - Không dùng bóng đen đặc) */
+    --shadow-soft: 0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.03);
+    --shadow-hover: 0 20px 25px -5px rgba(14, 165, 233, 0.15);
+}
+
+/* Chế độ Tối (Dark Mode) - Kích hoạt khi thẻ <html> hoặc <body> có class "dark" */
+[data-theme="dark"], body.dark {
+    --color-primary: #38BDF8;       /* Sky 400 - Sáng rực rỡ hơn trên nền đen */
+    --color-primary-hover: #0EA5E9;
+    --color-bg: #0F172A;            /* Slate 900 - Xanh đen sâu */
+    --color-surface: #1E293B;       /* Slate 800 - Nền Card sáng hơn 1 bậc */
+    --color-text: #F8FAFC;          /* Chữ trắng ngà */
+    --color-text-muted: #94A3B8;    /* Chữ phụ */
+    --color-border: #334155;        /* Viền tối mờ */
+    --shadow-soft: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+
+    --color-danger: #F87171;
+    --color-danger-bg: rgba(239, 68, 68, 0.12);
+    --color-danger-border: rgba(239, 68, 68, 0.25);
+
+    --color-success: #34D399;
+    --color-success-bg: rgba(16, 185, 129, 0.12);
+    --color-success-border: rgba(16, 185, 129, 0.25);
+}
+
+/* 2. Cấu hình cơ bản (Base Styles) */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 3. Khung chứa (Card & Layout) */
+.auth-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 24px;
+}
+
+.auth-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-soft);
+    width: 100%;
+    max-width: 440px;
+    padding: 36px 32px;
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.auth-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-primary);
+    font-size: 26px;
+    font-weight: 800;
+    margin-bottom: 8px;
+}
+
+.auth-subtitle {
+    color: var(--color-text-muted);
+    font-size: 14px;
+}
+
+/* 4. Tab chuyển đổi Đăng nhập / Đăng ký (Segmented Control) */
+.auth-tabs {
+    display: flex;
+    background-color: var(--color-bg);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    margin-bottom: 24px;
+    border: 1px solid var(--color-border);
+}
+
+.auth-tab-btn {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-weight: 600;
+    font-size: 14px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.auth-tab-btn.active {
+    background-color: var(--color-surface);
+    color: var(--color-primary);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+/* 5. Nhập liệu (Input Fields) */
+.form-group {
+    margin-bottom: 18px;
+}
+
+.form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--color-text);
+}
+
+.form-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    font-size: 14px;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.form-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+}
+
+.form-input.is-invalid {
+    border-color: var(--color-danger);
+    background-color: var(--color-danger-bg);
+}
+
+.form-input.is-invalid:focus {
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+/* Dòng thông báo lỗi dưới Input */
+.form-error {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-danger);
+    animation: fadeIn 0.2s ease-in-out;
+}
+
+.form-error-icon {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+}
+
+/* Hộp thông báo chung (Alerts) */
+.auth-alert {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    animation: fadeIn 0.25s ease-in-out;
+}
+
+.auth-alert-icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.auth-alert-danger {
+    background-color: var(--color-danger-bg);
+    border: 1px solid var(--color-danger-border);
+    color: var(--color-danger);
+}
+
+.auth-alert-success {
+    background-color: var(--color-success-bg);
+    border: 1px solid var(--color-success-border);
+    color: var(--color-success);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-3px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 6. Nút bấm (Buttons) */
+.btn-primary {
+    width: 100%;
+    padding: 13px 20px;
+    border: none;
+    border-radius: var(--radius-md);
+    background-color: var(--color-primary);
+    color: #FFFFFF;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35);
+    transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+    background-color: var(--color-primary-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-hover);
+}
+
+.btn-primary:active {
+    transform: scale(0.98);
+}
+
+/* Nút đổi giao diện Sáng / Tối */
+.theme-toggle-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    cursor: pointer;
+}

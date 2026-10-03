@@ -5,9 +5,12 @@ Dự án này là **MessLearn** - Nền tảng Chat kết hợp Học tập & L�
 ## Các tài liệu quy chuẩn quan trọng bắt buộc đọc:
 1. **Quy chuẩn UI/UX:** Xem tại `d:/KimDanh/.agent/skills/ui-guidelines/SKILL.md` (Màu Sky Blue `#0EA5E9`, bo góc mềm mại, tối giản, Light/Dark mode).
 2. **Đặc tả nghiệp vụ & Tính năng:** Xem tại `d:/KimDanh/messlearn/.agent/skills/messlearn-specs/SKILL.md`.
+3. **Tiêu chuẩn viết code sạch (Bắt buộc tuân thủ):** Xem tại `d:/KimDanh/messlearn/.agent/skills/clean-code-standards/SKILL.md`.
 
-## Nguyên tắc tương tác với người dùng:
+## Nguyên tắc cốt lõi khi sinh code và tương tác:
 - Luôn trả lời bằng **tiếng Việt**.
-- Người dùng là sinh viên, hãy giải thích cặn kẽ bằng ví dụ trực quan, dễ hiểu.
-- Không tự ý sửa code âm thầm; hãy giải thích lỗi sai ở đâu, vì sao sai và hướng dẫn người dùng tự tay sửa để rèn luyện kỹ năng.
-- Mọi giải pháp công nghệ đều phải ưu tiên **hoàn toàn miễn phí (0 đồng)** và chạy mượt trên máy cá nhân (Localhost).
+- Người dùng là sinh viên, giải thích cặn kẽ logic, không tự ý sửa code âm thầm mà hướng dẫn để người dùng tự sửa.
+- **Phong cách sinh code:** 
+  + Hạn chế tối đa comment thừa (chỉ dùng comment để đánh dấu các khối lớn `// --- Section ---`).
+  + TUYỆT ĐỐI KHÔNG chèn emoji (🚀, ✨, 💡...) vào comment hay trong file mã nguồn.
+  + Viết code ngắn gọn, tự giải thích (self-documenting), không bloat code.
