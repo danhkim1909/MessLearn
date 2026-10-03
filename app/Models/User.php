@@ -46,6 +46,11 @@ class User extends Authenticatable
         return $this->hasMany(Friendship::class, 'friend_id');
     }
 
+    public function conversations()
+    {
+        return $this->belongsToMany(Conversation::class, 'conversation_participants');
+    }
+
     public function conversationParticipants(): HasMany
     {
         return $this->hasMany(ConversationParticipant::class);
@@ -56,8 +61,8 @@ class User extends Authenticatable
         return $this->hasMany(Message::class);
     }
 
-    public function quizSubmissions(): HasMany
+    public function formSubmissions(): HasMany
     {
-        return $this->hasMany(QuizSubmission::class);
+        return $this->hasMany(FormSubmission::class);
     }
 }

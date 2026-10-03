@@ -1,4 +1,7 @@
-@extends('user.layouts.app')
+import codecs
+import os
+
+content = '''@extends('user.layouts.app')
 @section('title', 'MessLearn - Cửa sổ trò chuyện & Học tập')
 
 @section('content')
@@ -71,7 +74,7 @@
                         $isActive = isset($activeConversation) && $activeConversation->id === $conv->id;
                     @endphp
 
-                    <a href="{{ route('app.chat-board.show', $conv->id) }}" 
+                    <a href="{{ route('app.chat-board', ['c' => $conv->id]) }}" 
                        class="flex items-center gap-3 p-2.5 rounded-xl transition-all {{ $isActive ? 'bg-sky-50 dark:bg-sky-900/30' : 'hover:bg-white dark:hover:bg-slate-800' }}">
                         
                         <div class="relative shrink-0">
@@ -330,41 +333,12 @@
         </div>
     </div>
 </div>
+'''
 
-<!-- MODAL: LÀM BÀI TRẮC NGHIỆM / KHẢO SÁT -->
-<div id="modal-take-quiz" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
-    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 w-full h-[90vh] max-w-4xl rounded-3xl shadow-2xl flex flex-col overflow-hidden">
-        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3 p-6 shrink-0">
-            <div>
-                <h3 id="quiz-run-title" class="font-bold text-lg text-slate-900 dark:text-white">Đang tải...</h3>
-                <p id="quiz-run-desc" class="text-xs text-slate-500 dark:text-slate-400"></p>
-            </div>
-            <div class="flex items-center gap-2">
-                <button type="button" id="btn-submit-quiz" onclick="submitQuiz()" class="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-500/20 transition-all flex items-center gap-2">
-                    <i data-lucide="check-circle" class="w-4 h-4"></i>
-                    Nộp Bài
-                </button>
-                <button type="button" onclick="closeModal('modal-take-quiz')" class="p-2 text-slate-400 hover:text-rose-500 transition-colors">
-                    <i data-lucide="x" class="w-6 h-6"></i>
-                </button>
-            </div>
-        </div>
-        <div class="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-slate-900/30">
-            <div class="max-w-2xl mx-auto space-y-6" id="quiz-run-container">
-                <div class="flex justify-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div></div>
-            </div>
-            
-            <div id="quiz-result-container" class="max-w-2xl mx-auto mt-6 hidden">
-                <div class="p-6 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl text-center">
-                    <h4 class="text-emerald-600 dark:text-emerald-400 font-bold text-lg mb-2">Đã nộp bài thành công!</h4>
-                    <p class="text-slate-600 dark:text-slate-300 text-sm">Điểm số của bạn: <span id="quiz-score" class="font-bold text-xl text-emerald-600 dark:text-emerald-400"></span></p>
-                    <button type="button" onclick="closeModal('modal-take-quiz')" class="mt-4 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">Đóng</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+with open('resources/views/user/pages/chatboard/modal-take-quiz.html', 'r', encoding='utf-8') as f:
+    content += f.read()
 
+content += '''
 @endsection
 
 @section('scripts')
@@ -394,7 +368,7 @@
         }
 
         try {
-            const res = await fetch('{{ route('app.friend.send') }}', {
+            const res = await fetch('{{ route('friend.request') }}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -440,7 +414,7 @@
         }
 
         try {
-            const res = await fetch('{{ route('app.conversation.store-group') }}', {
+            const res = await fetch('{{ route('conversation.store-group') }}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -453,7 +427,7 @@
 
             if (res.ok) {
                 Toastify({text: "Tạo nhóm thành công!", style: {background: "#10b981"}}).showToast();
-                setTimeout(() => window.location.href = '{{ url('app/c') }}/' + data.conversation.id, 1000);
+                setTimeout(() => window.location.href = '?c=' + data.conversation.id, 1000);
             } else {
                 msgEl.innerText = data.message || 'Lỗi tạo nhóm';
                 msgEl.className = 'text-xs mt-2 text-rose-500 block text-center';
@@ -465,62 +439,6 @@
     }
 
     @if(isset($activeConversation))
-        function appendMessageToChat(message) {
-            const chatContainer = document.getElementById('chat-messages-container');
-            if(!chatContainer) return;
-            const isMine = message.user_id === {{ Auth::id() }};
-            const avatarChar = message.user.name.charAt(0).toUpperCase();
-
-            let innerContent = message.body;
-            if (message.type === 'quiz') {
-                innerContent = `
-                    <div class="flex flex-col gap-2 ${isMine ? 'text-white' : 'text-slate-800 dark:text-slate-200'}">
-                        <div class="flex items-center gap-2 font-bold mb-1">
-                            <i data-lucide="help-circle" class="w-4 h-4"></i>
-                            Bài kiểm tra
-                        </div>
-                        <p class="font-medium text-sm">${message.body}</p>
-                        <button type="button" onclick="openQuizRunner(${message.form_id || '{{ $message->form_id ?? 0 }}' })" class="mt-2 w-full text-center py-1.5 px-3 rounded-lg font-bold text-[11px] transition-all ${isMine ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-sky-500 hover:bg-sky-600 text-white' }">
-                            Bắt đầu làm bài
-                        </button>
-                    </div>
-                `;
-            } else {
-                innerContent = innerContent.replace(/\n/g, "<br>");
-            }
-
-            const messageHtml = `
-                <div class="flex ${isMine ? 'justify-end' : 'justify-start'}">
-                    <div class="flex gap-2 max-w-[75%] ${isMine ? 'flex-row-reverse' : 'flex-row'}">
-                        ${!isMine ? `
-                            <div class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 shrink-0 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 mt-1">
-                                ${avatarChar}
-                            </div>
-                        ` : ''}
-                        <div>
-                            ${!isMine ? `
-                                <div class="flex items-baseline gap-2 mb-1 ml-1">
-                                    <span class="text-xs font-bold text-slate-700 dark:text-slate-300">${message.user.name}</span>
-                                    <span class="text-[10px] text-slate-400">Vừa xong</span>
-                                </div>
-                            ` : `
-                                <div class="flex items-baseline gap-2 mb-1 mr-1 justify-end">
-                                    <span class="text-[10px] text-slate-400">Vừa xong</span>
-                                </div>
-                            `}
-                            <div class="${isMine ? 'bg-sky-500 text-white rounded-tr-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-sm'} px-4 py-2.5 rounded-2xl text-xs max-w-md">
-                                ${innerContent}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            chatContainer.insertAdjacentHTML('beforeend', messageHtml);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-            lucide.createIcons();
-        }
-
         async function sendChatMessage(e) {
             e.preventDefault();
             const input = document.getElementById('chat-input');
@@ -531,25 +449,16 @@
             input.value = '';
             
             try {
-                const headers = {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                };
-                
-                if (typeof window.Echo !== 'undefined' && window.Echo.socketId()) {
-                    headers['X-Socket-ID'] = window.Echo.socketId();
-                }
-
-                const res = await fetch('{{ route('app.conversation.message.store', $activeConversation->id) }}', {
+                const res = await fetch('{{ route('conversation.message.store', $activeConversation->id) }}', {
                     method: 'POST',
-                    headers: headers,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
                     body: JSON.stringify({ body: text })
                 });
 
-                if (res.ok) {
-                    const data = await res.json();
-                    appendMessageToChat(data);
-                } else {
+                if (!res.ok) {
                     Toastify({text: "Lỗi gửi tin nhắn", style: {background: "#f43f5e"}}).showToast();
                 }
             } catch (err) {
@@ -562,14 +471,63 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            if (typeof window.Echo !== 'undefined') {
-                window.Echo.private('conversation.{{ $activeConversation->id }}')
-                    .listen('.MessageSent', (e) => {
-                        appendMessageToChat(e.message);
-                    });
-            }
-        });
+        if (typeof window.Echo !== 'undefined') {
+            window.Echo.private('conversation.{{ $activeConversation->id }}')
+                .listen('MessageSent', (e) => {
+                    const message = e.message;
+                    const isMine = message.user_id === {{ Auth::id() }};
+                    const avatarChar = message.user.name.charAt(0).toUpperCase();
+
+                    let innerContent = message.body;
+                    if (message.type === 'quiz') {
+                        innerContent = `
+                            <div class="flex flex-col gap-2 ${isMine ? 'text-white' : 'text-slate-800 dark:text-slate-200'}">
+                                <div class="flex items-center gap-2 font-bold mb-1">
+                                    <i data-lucide="help-circle" class="w-4 h-4"></i>
+                                    Bài kiểm tra
+                                </div>
+                                <p class="font-medium text-sm">${message.body}</p>
+                                <button type="button" onclick="openQuizRunner(${message.form_id || '{{ $message->form_id ?? 0 }}' })" class="mt-2 w-full text-center py-1.5 px-3 rounded-lg font-bold text-[11px] transition-all ${isMine ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-sky-500 hover:bg-sky-600 text-white' }">
+                                    Bắt đầu làm bài
+                                </button>
+                            </div>
+                        `;
+                    } else {
+                        innerContent = innerContent.replace(/\\n/g, "<br>");
+                    }
+
+                    const messageHtml = `
+                        <div class="flex ${isMine ? 'justify-end' : 'justify-start'}">
+                            <div class="flex gap-2 max-w-[75%] ${isMine ? 'flex-row-reverse' : 'flex-row'}">
+                                ${!isMine ? `
+                                    <div class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 shrink-0 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 mt-1">
+                                        ${avatarChar}
+                                    </div>
+                                ` : ''}
+                                <div>
+                                    ${!isMine ? `
+                                        <div class="flex items-baseline gap-2 mb-1 ml-1">
+                                            <span class="text-xs font-bold text-slate-700 dark:text-slate-300">${message.user.name}</span>
+                                            <span class="text-[10px] text-slate-400">Vừa xong</span>
+                                        </div>
+                                    ` : `
+                                        <div class="flex items-baseline gap-2 mb-1 mr-1 justify-end">
+                                            <span class="text-[10px] text-slate-400">Vừa xong</span>
+                                        </div>
+                                    `}
+                                    <div class="${isMine ? 'bg-sky-500 text-white rounded-tr-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-sm'} px-4 py-2.5 rounded-2xl text-xs max-w-md">
+                                        ${innerContent}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    chatContainer.insertAdjacentHTML('beforeend', messageHtml);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                    lucide.createIcons();
+                });
+        }
     @endif
 
     let questionCount = 0;
@@ -771,138 +729,19 @@
             Toastify({ text: "Lỗi kết nối mạng", style: { background: "#f43f5e" } }).showToast();
         }
     }
+'''
 
-    let currentActiveFormId = null;
+with open('resources/views/user/pages/chatboard/js-take-quiz.js', 'r', encoding='utf-8') as f:
+    js_content = f.read()
+    js_content = js_content.replace('\\\\', '')
+    js_content = js_content.replace('\\{', '{')
+    js_content = js_content.replace('\\}', '}')
+    js_content = js_content.replace('\\<', '<')
+    js_content = js_content.replace('\\>', '>')
+    js_content = js_content.replace('\\$', '$')
+    content += js_content
 
-    async function openQuizRunner(formId) {
-        currentActiveFormId = formId;
-        document.getElementById('quiz-run-container').innerHTML = '<div class="flex justify-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div></div>';
-        document.getElementById('quiz-run-container').style.display = 'block';
-        document.getElementById('quiz-result-container').classList.add('hidden');
-        document.getElementById('btn-submit-quiz').style.display = 'flex';
-        
-        openModal('modal-take-quiz');
-        
-        try {
-            const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation->id ?? 0 }}/quiz/${formId}`);
-            if (!res.ok) {
-                Toastify({ text: "Không thể tải đề bài", style: { background: "#f43f5e" } }).showToast();
-                return;
-            }
-            const data = await res.json();
-            
-            document.getElementById('quiz-run-title').innerText = data.title;
-            document.getElementById('quiz-run-desc').innerText = data.description || '';
-            
-            renderQuizForm(data.schema);
-        } catch (err) {
-            Toastify({ text: "Lỗi kết nối", style: { background: "#f43f5e" } }).showToast();
-        }
-    }
+content += "\n</script>\n"
 
-    function renderQuizForm(schema) {
-        const container = document.getElementById('quiz-run-container');
-        container.innerHTML = '';
-        
-        if (!schema || !schema.questions) return;
-        
-        schema.questions.forEach((q, idx) => {
-            let optionsHtml = '';
-            
-            if (q.type === 'text') {
-                optionsHtml = `<textarea name="ans_${q.id}" rows="3" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:border-sky-500 focus:bg-white transition-all resize-none" placeholder="Nhập câu trả lời của bạn..."></textarea>`;
-            } else {
-                const inputType = q.type === 'radio' ? 'radio' : 'checkbox';
-                q.options.forEach(opt => {
-                    optionsHtml += `
-                        <label class="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer transition-all group">
-                            <input type="${inputType}" name="ans_${q.id}" value="${opt.id}" class="w-4 h-4 text-sky-500 border-slate-300 focus:ring-sky-500">
-                            <span class="text-sm text-slate-700 dark:text-slate-300 font-medium select-none">${opt.text}</span>
-                        </label>
-                    `;
-                });
-            }
-            
-            const pointsText = q.points > 0 ? `<span class="ml-2 px-2 py-0.5 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 text-[10px] font-bold rounded-md">${q.points} điểm</span>` : '';
-
-            container.innerHTML += `
-                <div class="p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm mb-4 question-block" data-qid="${q.id}" data-qtype="${q.type}">
-                    <h4 class="font-bold text-slate-900 dark:text-white mb-4 flex items-start gap-2">
-                        <span class="shrink-0 w-6 h-6 rounded-lg bg-sky-100 dark:bg-sky-900/50 text-sky-500 flex items-center justify-center text-xs">${idx + 1}</span>
-                        <span>${q.title} ${pointsText}</span>
-                    </h4>
-                    <div class="space-y-1 ml-8">
-                        ${optionsHtml}
-                    </div>
-                </div>
-            `;
-        });
-    }
-
-    async function submitQuiz() {
-        if (!currentActiveFormId) return;
-        
-        const answers = {};
-        const blocks = document.querySelectorAll('.question-block');
-        
-        blocks.forEach(block => {
-            const qId = block.getAttribute('data-qid');
-            const qType = block.getAttribute('data-qtype');
-            
-            if (qType === 'text') {
-                answers[qId] = block.querySelector('textarea').value.trim();
-            } else {
-                const checked = Array.from(block.querySelectorAll('input:checked')).map(el => el.value);
-                if (qType === 'radio') {
-                    answers[qId] = checked[0] || null;
-                } else {
-                    answers[qId] = checked;
-                }
-            }
-        });
-        
-        const btn = document.getElementById('btn-submit-quiz');
-        const originalHtml = btn.innerHTML;
-        btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Đang nộp...';
-        btn.disabled = true;
-        
-        try {
-            const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation->id ?? 0 }}/quiz/${currentActiveFormId}/submit`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                },
-                body: JSON.stringify({ answers })
-            });
-            
-            const data = await res.json();
-            
-            if (res.ok) {
-                document.getElementById('quiz-run-container').style.display = 'none';
-                document.getElementById('btn-submit-quiz').style.display = 'none';
-                
-                const resultContainer = document.getElementById('quiz-result-container');
-                resultContainer.classList.remove('hidden');
-                
-                document.getElementById('quiz-score').innerText = `${data.score} / ${data.max_score}`;
-                Toastify({ text: "Nộp bài thành công!", style: { background: "#10b981" } }).showToast();
-            } else {
-                if (data.score !== undefined) {
-                    document.getElementById('quiz-run-container').style.display = 'none';
-                    document.getElementById('btn-submit-quiz').style.display = 'none';
-                    const resultContainer = document.getElementById('quiz-result-container');
-                    resultContainer.classList.remove('hidden');
-                    document.getElementById('quiz-score').innerText = `${data.score} / ${data.max_score}`;
-                }
-                Toastify({ text: data.message || "Lỗi khi nộp bài", style: { background: "#f59e0b" } }).showToast();
-            }
-        } catch (err) {
-            Toastify({ text: "Lỗi kết nối", style: { background: "#f43f5e" } }).showToast();
-        } finally {
-            btn.innerHTML = originalHtml;
-            btn.disabled = false;
-            lucide.createIcons();
-        }
-    }
-</script>
+with open('resources/views/user/pages/chatboard/index.blade.php', 'w', encoding='utf-8') as f:
+    f.write(content)

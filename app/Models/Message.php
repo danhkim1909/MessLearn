@@ -17,7 +17,7 @@ class Message extends Model
         'type',
         'body',
         'file_path',
-        'quiz_id',
+        'form_id',
         'reply_to_id',
         'is_pinned',
         'metadata',
@@ -42,9 +42,9 @@ class Message extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function quiz(): BelongsTo
+    public function form(): BelongsTo
     {
-        return $this->belongsTo(Quiz::class);
+        return $this->belongsTo(Form::class);
     }
 
     public function replyTo(): BelongsTo

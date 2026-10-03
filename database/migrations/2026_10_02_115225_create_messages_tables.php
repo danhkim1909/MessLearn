@@ -43,12 +43,12 @@ return new class extends Migration
             // Đường dẫn file nếu tin nhắn là ảnh hoặc voice audio
             $table->string('file_path')->nullable()->comment('Đường dẫn file trên server nếu là ảnh hoặc âm thanh');
             
-            // Khóa ngoại trỏ đến bài quiz (nếu type = quiz, các loại khác thì null)
-            $table->foreignId('quiz_id')
+            // Khóa ngoại trỏ đến form (nếu type = form, các loại khác thì null)
+            $table->foreignId('form_id')
                 ->nullable()
-                ->constrained('quizzes')
+                ->constrained('forms')
                 ->nullOnDelete()
-                ->comment('ID bài quiz đính kèm nếu type là quiz');
+                ->comment('ID form đính kèm nếu type là form/quiz');
                 
             // Trả lời (Reply / Quote) tin nhắn cũ
             $table->foreignId('reply_to_id')
