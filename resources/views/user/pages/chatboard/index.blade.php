@@ -164,7 +164,7 @@
                         @php
                             $isMine = $message->user_id === Auth::id();
                         @endphp
-                        <div class="flex {{ $isMine ? 'justify-end' : 'justify-start' }}">
+                        <div id="msg-{{ $message->id }}" class="flex {{ $isMine ? 'justify-end' : 'justify-start' }}">
                             <div class="flex gap-2 max-w-[75%] {{ $isMine ? 'flex-row-reverse' : 'flex-row' }}">
                                 @if(!$isMine)
                                     <div class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 shrink-0 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 mt-1">
@@ -182,7 +182,18 @@
                                             <span class="text-[10px] text-slate-400">{{ $message->created_at->format('H:i') }}</span>
                                         </div>
                                     @endif
-                                    <div class="{{ $isMine ? 'bg-sky-500 text-white rounded-tr-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-sm' }} px-4 py-2.5 rounded-2xl text-xs max-w-md">
+                                    <div class="{{ $isMine ? 'bg-sky-500 text-white rounded-tr-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-sm' }} px-4 py-2.5 rounded-2xl text-xs max-w-md relative group">
+                                        @if($message->replyTo)
+                                            <div onclick="scrollToMessage({{ $message->reply_to_id }})" class="cursor-pointer hover:opacity-100 transition-all mb-2 p-2 rounded-xl {{ $isMine ? 'bg-black/10' : 'bg-black/5 dark:bg-white/5' }} border-l-2 {{ $isMine ? 'border-white/50' : 'border-sky-500' }} text-[11px] opacity-80">
+                                                <div class="font-bold mb-0.5">{{ $message->replyTo->user->name }}</div>
+                                                <div class="truncate">{{ $message->replyTo->type === 'quiz' ? 'Bài kiểm tra: ' . $message->replyTo->body : $message->replyTo->body }}</div>
+                                            </div>
+                                        @endif
+                                        
+                                        <!-- Nút Reply -->
+                                        <button onclick="prepareReply({{ $message->id }}, '{{ addslashes($message->user->name) }}', '{{ addslashes(str_replace(['\r', '\n'], ' ', \Illuminate\Support\Str::limit($message->type === 'quiz' ? 'Bài kiểm tra: '.$message->body : $message->body, 50))) }}')" class="absolute {{ $isMine ? 'right-full mr-2' : 'left-full ml-2' }} top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10" title="Trả lời">
+                                            <i data-lucide="reply" class="w-3.5 h-3.5"></i>
+                                        </button>
                                         @if($message->type === 'quiz')
                                             <div class="flex flex-col gap-2 {{ $isMine ? 'text-white' : 'text-slate-800 dark:text-slate-200' }}">
                                                 <div class="flex items-center gap-2 font-bold mb-1">
@@ -220,8 +231,18 @@
             </div>
 
             <!-- Khung nhập Chat -->
-            <div class="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0">
+            <div class="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0 flex flex-col">
+                <div id="reply-preview-container" class="hidden mb-3 mx-12 p-3 bg-slate-50 dark:bg-slate-800/80 border-l-4 border-sky-500 rounded-xl flex items-center justify-between">
+                    <div class="text-xs min-w-0 flex-1">
+                        <div class="font-bold text-slate-700 dark:text-slate-300 mb-0.5">Đang trả lời: <span id="reply-to-name"></span></div>
+                        <div class="text-slate-500 dark:text-slate-400 truncate" id="reply-to-text"></div>
+                    </div>
+                    <button type="button" onclick="cancelReply()" class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors ml-3 shrink-0">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
                 <form id="chat-form" class="flex items-end gap-2" onsubmit="sendChatMessage(event)">
+                    <input type="hidden" id="reply-to-id" value="">
                     <button type="button" class="p-3 text-slate-400 hover:text-sky-500 transition-colors">
                         <i data-lucide="paperclip" class="w-5 h-5"></i>
                     </button>
@@ -604,26 +625,40 @@
             const isMine = message.user_id === {{ Auth::id() }};
             const avatarChar = message.user.name.charAt(0).toUpperCase();
 
-            let innerContent = message.body;
+            let innerContent = '';
+            if (message.reply_to) {
+                innerContent += `
+                    <div onclick="scrollToMessage(${message.reply_to_id})" class="cursor-pointer hover:opacity-100 transition-all mb-2 p-2 rounded-xl ${isMine ? 'bg-black/10' : 'bg-black/5 dark:bg-white/5'} border-l-2 ${isMine ? 'border-white/50' : 'border-sky-500'} text-[11px] opacity-80">
+                        <div class="font-bold mb-0.5">${message.reply_to.user ? message.reply_to.user.name : ''}</div>
+                        <div class="truncate">${message.reply_to.type === 'quiz' ? 'Bài kiểm tra: ' + message.reply_to.body : message.reply_to.body}</div>
+                    </div>
+                `;
+            }
+            
             if (message.type === 'quiz') {
-                innerContent = `
+                innerContent += `
                     <div class="flex flex-col gap-2 ${isMine ? 'text-white' : 'text-slate-800 dark:text-slate-200'}">
                         <div class="flex items-center gap-2 font-bold mb-1">
                             <i data-lucide="help-circle" class="w-4 h-4"></i>
                             Bài kiểm tra
                         </div>
                         <p class="font-medium text-sm">${message.body}</p>
-                        <button type="button" onclick="openQuizRunner(${message.quiz_id || '{{ $message->quiz_id ?? 0 }}' })" class="mt-2 w-full text-center py-1.5 px-3 rounded-lg font-bold text-[11px] transition-all ${isMine ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-sky-500 hover:bg-sky-600 text-white' }">
-                            Bắt đầu làm bài
-                        </button>
+                        <div class="flex gap-2 mt-2">
+                            <button type="button" onclick="openQuizRunner(${message.quiz_id || 0})" class="flex-1 text-center py-1.5 px-3 rounded-lg font-bold text-[11px] transition-all ${isMine ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-sky-500 hover:bg-sky-600 text-white'}">
+                                Bắt đầu làm bài
+                            </button>
+                            <button type="button" onclick="openQuizLeaderboard(${message.quiz_id || 0})" class="flex-1 text-center py-1.5 px-3 rounded-lg font-bold text-[11px] transition-all bg-amber-500 hover:bg-amber-600 text-white">
+                                Xem điểm
+                            </button>
+                        </div>
                     </div>
                 `;
             } else {
-                innerContent = innerContent.replace(/\n/g, "<br>");
+                innerContent += (message.body || '').replace(/\n/g, "<br>");
             }
 
             const messageHtml = `
-                <div class="flex ${isMine ? 'justify-end' : 'justify-start'}">
+                <div id="msg-${message.id}" class="flex ${isMine ? 'justify-end' : 'justify-start'}">
                     <div class="flex gap-2 max-w-[75%] ${isMine ? 'flex-row-reverse' : 'flex-row'}">
                         ${!isMine ? `
                             <div class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 shrink-0 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 mt-1">
@@ -641,8 +676,11 @@
                                     <span class="text-[10px] text-slate-400">Vừa xong</span>
                                 </div>
                             `}
-                            <div class="${isMine ? 'bg-sky-500 text-white rounded-tr-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-sm'} px-4 py-2.5 rounded-2xl text-xs max-w-md">
+                            <div class="${isMine ? 'bg-sky-500 text-white rounded-tr-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-sm'} px-4 py-2.5 rounded-2xl text-xs max-w-md relative group">
                                 ${innerContent}
+                                <button onclick="prepareReply(${message.id}, '${(message.user.name || '').replace(/'/g, '\\\'')}', '${(message.type === 'quiz' ? 'Bài kiểm tra: ' + message.body : message.body || '').replace(/'/g, '\\\'').replace(/\r\n|\n|\r/g, ' ').substring(0, 50)}')" class="absolute ${isMine ? 'right-full mr-2' : 'left-full ml-2'} top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10" title="Trả lời">
+                                    <i data-lucide="reply" class="w-3.5 h-3.5"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -654,14 +692,47 @@
             lucide.createIcons();
         }
 
+
+        function scrollToMessage(id) {
+            const el = document.getElementById('msg-' + id);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const bubble = el.querySelector('.max-w-md');
+                if (bubble) {
+                    bubble.classList.add('ring-4', 'ring-amber-300', 'dark:ring-amber-500', 'transition-all');
+                    setTimeout(() => {
+                        bubble.classList.remove('ring-4', 'ring-amber-300', 'dark:ring-amber-500');
+                    }, 1500);
+                }
+            }
+        }
+
+        function prepareReply(messageId, userName, text) {
+            document.getElementById('reply-to-id').value = messageId;
+            document.getElementById('reply-to-name').innerText = userName;
+            document.getElementById('reply-to-text').innerText = text;
+            document.getElementById('reply-preview-container').classList.remove('hidden');
+            document.getElementById('chat-input').focus();
+        }
+
+        function cancelReply() {
+            document.getElementById('reply-to-id').value = '';
+            document.getElementById('reply-preview-container').classList.add('hidden');
+        }
+        
         async function sendChatMessage(e) {
             e.preventDefault();
             const input = document.getElementById('chat-input');
+            const replyInput = document.getElementById('reply-to-id');
             const text = input.value.trim();
+            const replyToId = replyInput ? replyInput.value : '';
             
             if (!text) return;
 
             input.value = '';
+            input.style.height = 'auto';
+            cancelReply();
+            input.focus();
             
             try {
                 const headers = {
@@ -673,10 +744,15 @@
                     headers['X-Socket-ID'] = window.Echo.socketId();
                 }
 
+                const payload = { body: text };
+                if (replyToId) {
+                    payload.reply_to_id = replyToId;
+                }
+
                 const res = await fetch('{{ route('app.conversation.message.store', $activeConversation->id) }}', {
                     method: 'POST',
                     headers: headers,
-                    body: JSON.stringify({ body: text })
+                    body: JSON.stringify(payload)
                 });
 
                 if (res.ok) {

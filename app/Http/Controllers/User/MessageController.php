@@ -18,6 +18,7 @@ class MessageController extends Controller
         try {
             $request->validate([
                 'body' => 'required|string|max:2000',
+                'reply_to_id' => 'nullable|exists:messages,id',
             ]);
 
             $userId = Auth::id();
@@ -32,9 +33,10 @@ class MessageController extends Controller
                 'user_id' => $userId,
                 'type' => 'text',
                 'body' => $request->body,
+                'reply_to_id' => $request->reply_to_id,
             ]);
 
-            $message->load('user');
+            $message->load(['user', 'replyTo.user']);
 
             $conversation->touch();
 
