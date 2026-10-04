@@ -33,5 +33,6 @@ Route::prefix('app')->middleware(CheckLoginMiddleware::class)->name('app.')->gro
         Route::post('/{conversation}/quiz', [\App\Http\Controllers\User\QuizController::class, 'store'])->name('quiz.store');
         Route::get('/{conversation}/quiz/{form}', [\App\Http\Controllers\User\QuizController::class, 'show'])->name('quiz.show');
         Route::post('/{conversation}/quiz/{form}/submit', [\App\Http\Controllers\User\QuizController::class, 'submit'])->name('quiz.submit');
+        Route::get('/{conversation}/quiz/{form}/results', [\App\Http\Controllers\User\QuizController::class, 'results'])->name('quiz.results');
     });
 });

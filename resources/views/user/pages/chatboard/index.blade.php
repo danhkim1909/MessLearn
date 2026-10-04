@@ -53,6 +53,29 @@
             </div>
         </div>
 
+        @if(isset($pendingRequests) && $pendingRequests->count() > 0)
+        <div class="px-3 pb-1">
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider pb-1.5">Lời mời kết bạn ({{ $pendingRequests->count() }})</p>
+            @foreach($pendingRequests as $req)
+            <div class="flex items-center gap-2.5 p-2.5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-xl mb-1.5">
+                <div class="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-sm shrink-0">
+                    {{ strtoupper(substr($req->sender->name, 0, 1)) }}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="font-bold text-xs text-slate-900 dark:text-white truncate">{{ $req->sender->name }}</p>
+                    <p class="text-[10px] text-slate-500 truncate">{{ $req->sender->email }}</p>
+                </div>
+                <form method="POST" action="{{ route('app.friend.accept', $req->id) }}" class="shrink-0">
+                    @csrf
+                    <button type="submit" class="p-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors" title="Chấp nhận">
+                        <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                    </button>
+                </form>
+            </div>
+            @endforeach
+        </div>
+        @endif
+
         <div class="flex-1 overflow-y-auto p-2 space-y-1">
             @if(isset($conversations) && $conversations->isEmpty())
                 <p class="text-xs text-slate-400 text-center py-4">Chưa có cuộc trò chuyện nào</p>
@@ -167,9 +190,23 @@
                                                     Bài kiểm tra
                                                 </div>
                                                 <p class="font-medium text-sm">{{ $message->body }}</p>
-                                                <button type="button" onclick="openQuizRunner({{ $message->form_id }})" class="mt-2 w-full text-center py-1.5 px-3 rounded-lg font-bold text-[11px] transition-all {{ $isMine ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-sky-500 hover:bg-sky-600 text-white' }}">
-                                                    Bắt đầu làm bài
-                                                </button>
+                                                @php
+                                                    $hasSubmitted = $message->quiz && $message->quiz->submissions->where('user_id', Auth::id())->count() > 0;
+                                                @endphp
+                                                <div class="flex gap-2 mt-2">
+                                                    @if($hasSubmitted)
+                                                        <button type="button" disabled class="flex-1 text-center py-1.5 px-3 rounded-lg font-bold text-[11px] transition-all bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed">
+                                                            Đã làm bài
+                                                        </button>
+                                                    @else
+                                                        <button type="button" onclick="openQuizRunner({{ $message->quiz_id }})" class="flex-1 text-center py-1.5 px-3 rounded-lg font-bold text-[11px] transition-all {{ $isMine ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-sky-500 hover:bg-sky-600 text-white' }}">
+                                                            Bắt đầu làm bài
+                                                        </button>
+                                                    @endif
+                                                    <button type="button" onclick="openQuizLeaderboard({{ $message->quiz_id }})" class="flex-1 text-center py-1.5 px-3 rounded-lg font-bold text-[11px] transition-all bg-amber-500 hover:bg-amber-600 text-white">
+                                                        Xem điểm
+                                                    </button>
+                                                </div>
                                             </div>
                                         @else
                                             {!! nl2br(e($message->body)) !!}
@@ -212,7 +249,9 @@
         <div class="p-4 border-b border-slate-200 dark:border-slate-800">
             <h2 class="font-extrabold text-sm text-slate-900 dark:text-white uppercase tracking-wider">Không gian học tập</h2>
         </div>
-        <div class="p-4 space-y-4">
+        <div class="p-4 space-y-3 flex-1 overflow-y-auto">
+
+            {{-- Tạo Quiz - đã có --}}
             <button onclick="openModal('modal-create-quiz')" class="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl hover:border-sky-500 hover:shadow-md hover:shadow-sky-500/10 transition-all group">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-sky-50 dark:bg-sky-900/30 text-sky-500 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -225,6 +264,79 @@
                 </div>
                 <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 group-hover:text-sky-500 transition-colors"></i>
             </button>
+
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 pt-1">Sắp có</p>
+
+            {{-- Bảng xếp hạng - placeholder --}}
+            <button disabled class="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl opacity-60 cursor-not-allowed">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-500 flex items-center justify-center">
+                        <i data-lucide="trophy" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-left">
+                        <h4 class="font-bold text-sm text-slate-900 dark:text-white">Bảng xếp hạng</h4>
+                        <p class="text-[10px] text-slate-500">Xếp hạng tuần theo điểm</p>
+                    </div>
+                </div>
+                <span class="text-[9px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">Sắp có</span>
+            </button>
+
+            {{-- Voice Note - placeholder --}}
+            <button disabled class="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl opacity-60 cursor-not-allowed">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-900/20 text-rose-500 flex items-center justify-center">
+                        <i data-lucide="mic" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-left">
+                        <h4 class="font-bold text-sm text-slate-900 dark:text-white">Ghi âm Voice Note</h4>
+                        <p class="text-[10px] text-slate-500">Gửi ghi âm thoại vào chat</p>
+                    </div>
+                </div>
+                <span class="text-[9px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">Sắp có</span>
+            </button>
+
+            {{-- Vẽ lên ảnh - placeholder --}}
+            <button disabled class="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl opacity-60 cursor-not-allowed">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-900/20 text-purple-500 flex items-center justify-center">
+                        <i data-lucide="image" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-left">
+                        <h4 class="font-bold text-sm text-slate-900 dark:text-white">Vẽ lên ảnh</h4>
+                        <p class="text-[10px] text-slate-500">Chú thích ảnh bằng Canvas</p>
+                    </div>
+                </div>
+                <span class="text-[9px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">Sắp có</span>
+            </button>
+
+            {{-- Lịch hẹn nhóm - placeholder --}}
+            <button disabled class="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl opacity-60 cursor-not-allowed">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 flex items-center justify-center">
+                        <i data-lucide="calendar" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-left">
+                        <h4 class="font-bold text-sm text-slate-900 dark:text-white">Lịch hẹn nhóm</h4>
+                        <p class="text-[10px] text-slate-500">Đặt lịch học & sự kiện</p>
+                    </div>
+                </div>
+                <span class="text-[9px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">Sắp có</span>
+            </button>
+
+            {{-- Mini-game - placeholder --}}
+            <button disabled class="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl opacity-60 cursor-not-allowed">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 flex items-center justify-center">
+                        <i data-lucide="gamepad-2" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-left">
+                        <h4 class="font-bold text-sm text-slate-900 dark:text-white">Mini-game</h4>
+                        <p class="text-[10px] text-slate-500">Xúc xắc, kéo búa bao...</p>
+                    </div>
+                </div>
+                <span class="text-[9px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">Sắp có</span>
+            </button>
+
         </div>
     </aside>
     @endif
@@ -365,6 +477,27 @@
     </div>
 </div>
 
+
+<!-- MODAL: BẢNG XẾP HẠNG & CHI TIẾT -->
+<div id="modal-quiz-leaderboard" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 w-full h-[90vh] max-w-4xl rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3 p-6 shrink-0">
+            <div>
+                <h3 id="leaderboard-title" class="font-bold text-lg text-slate-900 dark:text-white">Bảng Xếp Hạng</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Kết quả làm bài của các thành viên</p>
+            </div>
+            <button type="button" onclick="closeModal('modal-quiz-leaderboard')" class="p-2 text-slate-400 hover:text-rose-500 transition-colors">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-slate-900/30">
+            <div id="leaderboard-container" class="max-w-3xl mx-auto space-y-4">
+                <div class="flex justify-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 @endsection
 
 @section('scripts')
@@ -480,7 +613,7 @@
                             Bài kiểm tra
                         </div>
                         <p class="font-medium text-sm">${message.body}</p>
-                        <button type="button" onclick="openQuizRunner(${message.form_id || '{{ $message->form_id ?? 0 }}' })" class="mt-2 w-full text-center py-1.5 px-3 rounded-lg font-bold text-[11px] transition-all ${isMine ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-sky-500 hover:bg-sky-600 text-white' }">
+                        <button type="button" onclick="openQuizRunner(${message.quiz_id || '{{ $message->quiz_id ?? 0 }}' })" class="mt-2 w-full text-center py-1.5 px-3 rounded-lg font-bold text-[11px] transition-all ${isMine ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-sky-500 hover:bg-sky-600 text-white' }">
                             Bắt đầu làm bài
                         </button>
                     </div>
@@ -773,6 +906,92 @@
     }
 
     let currentActiveFormId = null;
+
+
+    async function openQuizLeaderboard(formId) {
+        document.getElementById('leaderboard-container').innerHTML = '<div class="flex justify-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div></div>';
+        openModal('modal-quiz-leaderboard');
+
+        try {
+            const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation->id ?? 0 }}/quiz/${formId}/results`);
+            if (!res.ok) {
+                Toastify({ text: "Không thể tải điểm số", style: { background: "#f43f5e" } }).showToast();
+                closeModal('modal-quiz-leaderboard');
+                return;
+            }
+            
+            const data = await res.json();
+            document.getElementById('leaderboard-title').innerText = "Kết quả: " + data.quiz_title;
+            
+            let html = '';
+            
+            if (data.submissions.length === 0) {
+                html = '<div class="text-center text-slate-500 py-8 text-sm">Chưa có ai nộp bài.</div>';
+            } else {
+                data.submissions.forEach((sub, index) => {
+                    let rankClass = "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300";
+                    if (index === 0) rankClass = "bg-amber-100 dark:bg-amber-900/50 text-amber-500";
+                    else if (index === 1) rankClass = "bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200";
+                    else if (index === 2) rankClass = "bg-orange-100 dark:bg-orange-900/50 text-orange-500";
+
+                    let detailsHtml = '';
+                    if (data.is_owner && sub.answers) {
+                        detailsHtml = `
+                            <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700/60 space-y-3 hidden" id="details-${sub.id}">
+                                <h5 class="text-xs font-bold text-slate-500 uppercase">Chi tiết câu trả lời</h5>
+                        `;
+                        sub.answers.forEach(ans => {
+                            const isCorrect = ans.is_correct;
+                            const color = isCorrect ? 'text-emerald-500' : 'text-rose-500';
+                            const icon = isCorrect ? 'check-circle' : 'x-circle';
+                            detailsHtml += `
+                                <div class="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl text-sm">
+                                    <p class="font-medium text-slate-700 dark:text-slate-300 mb-1">${ans.question_text}</p>
+                                    <div class="flex items-center gap-2 ${color}">
+                                        <i data-lucide="${icon}" class="w-4 h-4"></i>
+                                        <span class="font-bold text-xs">${ans.answer_text || '(Không trả lời)'}</span>
+                                        <span class="ml-auto text-xs text-slate-400">+${ans.points_earned} đ</span>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        detailsHtml += `</div>
+                            <button type="button" onclick="document.getElementById('details-${sub.id}').classList.toggle('hidden')" class="mt-2 text-[11px] font-bold text-sky-500 hover:text-sky-600 underline">Xem chi tiết</button>
+                        `;
+                    }
+
+                    html += `
+                        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
+                            <div class="flex items-center gap-4">
+                                <div class="w-8 h-8 rounded-full flex items-center justify-center font-black text-sm ${rankClass}">
+                                    #${index + 1}
+                                </div>
+                                <div class="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-900/30 text-sky-500 flex items-center justify-center font-bold text-sm shrink-0">
+                                    ${sub.user.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="font-bold text-sm text-slate-900 dark:text-white truncate">${sub.user.name}</h4>
+                                    <p class="text-[10px] text-slate-500">${sub.completed_at || 'Không rõ thời gian'}</p>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-xl font-black text-emerald-500">${sub.total_score}</div>
+                                    <div class="text-[10px] text-slate-400 font-medium">Điểm</div>
+                                </div>
+                            </div>
+                            ${detailsHtml}
+                        </div>
+                    `;
+                });
+            }
+            
+            document.getElementById('leaderboard-container').innerHTML = html;
+            lucide.createIcons();
+
+        } catch (err) {
+            Toastify({ text: "Lỗi kết nối", style: { background: "#f43f5e" } }).showToast();
+            closeModal('modal-quiz-leaderboard');
+        }
+    }
 
     async function openQuizRunner(formId) {
         currentActiveFormId = formId;

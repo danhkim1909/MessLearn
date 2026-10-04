@@ -30,16 +30,19 @@ class FriendshipController extends Controller
 
     public function sendRequest(Request $request)
     {
-        $friendId = $request->friend_id;
+        $email = $request->email;
         $userId = Auth::id();
 
-        if($friendId == $userId) {
-            return redirect()->back()->with('error', 'Bạn không thể gửi lời mời kết bạn cho chính mình');
+        $friend = User::where('email', $email)->first();
+        
+        if (!$friend) {
+            return response()->json(['message' => 'Người dùng không tồn tại'], 404);
         }
 
-        $friend = User::find($friendId);
-        if (!$friend) {
-            return redirect()->back()->with('error', 'Người dùng không tồn tại');
+        $friendId = $friend->id;
+
+        if($friendId == $userId) {
+            return response()->json(['message' => 'Bạn không thể gửi lời mời kết bạn cho chính mình'], 400);
         }
 
         $exists = Friendship::where(function ($query) use ($userId, $friendId) {
@@ -49,7 +52,7 @@ class FriendshipController extends Controller
         })->first();
 
         if ($exists) {
-            return redirect()->back()->with('error', 'Yêu cầu kết bạn đã tồn tại hoặc hai người đã là bạn');
+            return response()->json(['message' => 'Yêu cầu kết bạn đã tồn tại hoặc hai người đã là bạn'], 400);
         }
 
         Friendship::create([
@@ -58,7 +61,7 @@ class FriendshipController extends Controller
             'status' => 'pending',
         ]);
 
-        return redirect()->back()->with('success', 'Đã gửi lời mời kết bạn thành công');
+        return response()->json(['message' => 'Đã gửi lời mời kết bạn thành công']);
     }
 
     public function acceptRequest($id)

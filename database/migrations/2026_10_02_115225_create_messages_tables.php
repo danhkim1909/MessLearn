@@ -44,9 +44,9 @@ return new class extends Migration
             $table->string('file_path')->nullable()->comment('Đường dẫn file trên server nếu là ảnh hoặc âm thanh');
             
             // Khóa ngoại trỏ đến form (nếu type = form, các loại khác thì null)
-            $table->foreignId('form_id')
+            $table->foreignId('quiz_id')
                 ->nullable()
-                ->constrained('forms')
+                ->constrained('quizzes')
                 ->nullOnDelete()
                 ->comment('ID form đính kèm nếu type là form/quiz');
                 

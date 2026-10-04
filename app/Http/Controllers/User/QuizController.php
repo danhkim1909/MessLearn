@@ -6,6 +6,8 @@ use App\Events\MessageSent;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Models\Quiz;
+use App\Models\QuizSubmission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -13,8 +15,10 @@ use Illuminate\Support\Facades\Log;
 
 class QuizController extends Controller
 {
+    // --- Táº¡o bĂ i kiá»ƒm tra ---
     public function store(Request $request, Conversation $conversation)
     {
+        \Illuminate\Support\Facades\Log::info('Quiz payload:', $request->all());
         if (!$conversation->participants()->where('user_id', Auth::id())->exists()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -27,21 +31,41 @@ class QuizController extends Controller
 
         try {
             $message = DB::transaction(function () use ($request, $conversation) {
-                $formId = DB::table('forms')->insertGetId([
+                $quiz = Quiz::create([
                     'title' => $request->title,
                     'description' => $request->description,
-                    'type' => $request->type ?? 'quiz',
-                    'schema' => json_encode($request->schema),
-                    'created_at' => now(),
-                    'updated_at' => now(),
                 ]);
+
+                if (isset($request->schema['questions'])) {
+                    foreach ($request->schema['questions'] as $index => $qData) {
+                        $question = $quiz->questions()->create([
+                            'question_text' => $qData['title'],
+                            'type' => $qData['type'],
+                            'points' => $qData['points'] ?? 1,
+                            'correct_text_answer' => $qData['type'] === 'text' ? ($qData['correct_answers'][0] ?? null) : null,
+                            'order' => $index,
+                        ]);
+
+                        if (in_array($qData['type'], ['radio', 'checkbox'])) {
+                            foreach ($qData['options'] as $opt) {
+                                $optId = $opt['id'] ?? null;
+                                $optText = $opt['text'] ?? '';
+                                $isCorrect = in_array($optId, $qData['correct_answers'] ?? []);
+                                $question->options()->create([
+                                    'option_text' => $optText,
+                                    'is_correct' => $isCorrect,
+                                ]);
+                            }
+                        }
+                    }
+                }
 
                 $msg = Message::create([
                     'conversation_id' => $conversation->id,
                     'user_id' => Auth::id(),
                     'type' => 'quiz',
                     'body' => 'Đã tạo bài: ' . $request->title,
-                    'form_id' => $formId,
+                    'quiz_id' => $quiz->id,
                 ]);
                 
                 $msg->load('user');
@@ -58,92 +82,139 @@ class QuizController extends Controller
         }
     }
 
-    public function show(Conversation $conversation, $formId)
+    // --- Láº¥y thĂ´ng tin bĂ i kiá»ƒm tra ---
+    public function show(Conversation $conversation, $quizId)
     {
         if (!$conversation->participants()->where('user_id', Auth::id())->exists()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $form = DB::table('forms')->where('id', $formId)->first();
-        if (!$form) {
-            return response()->json(['message' => 'Not found'], 404);
-        }
+        $quiz = Quiz::with('questions.options')->findOrFail($quizId);
 
-        $schema = json_decode($form->schema, true);
-        
-        // Remove correct_answers for students
-        if (isset($schema['questions'])) {
-            foreach ($schema['questions'] as &$question) {
-                if (isset($question['correct_answers'])) {
-                    unset($question['correct_answers']);
-                }
-            }
-        }
+        $schema = [
+            'questions' => $quiz->questions->map(function ($q) {
+                return [
+                    'id' => $q->id,
+                    'type' => $q->type,
+                    'title' => $q->question_text,
+                    'points' => $q->points,
+                    'options' => $q->options->map(function ($opt) {
+                        return [
+                            'id' => $opt->id,
+                            'text' => $opt->option_text,
+                        ];
+                    })->toArray(),
+                ];
+            })->toArray()
+        ];
 
         return response()->json([
-            'id' => $form->id,
-            'title' => $form->title,
-            'description' => $form->description,
+            'id' => $quiz->id,
+            'title' => $quiz->title,
+            'description' => $quiz->description,
             'schema' => $schema,
         ]);
     }
 
-    public function submit(Request $request, Conversation $conversation, $formId)
+    // --- Ná»™p bĂ i vĂ  cháº¥m Ä‘iá»ƒm ---
+    public function submit(Request $request, Conversation $conversation, $quizId)
     {
         if (!$conversation->participants()->where('user_id', Auth::id())->exists()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $form = DB::table('forms')->where('id', $formId)->first();
-        if (!$form) {
-            return response()->json(['message' => 'Not found'], 404);
-        }
+        $quiz = Quiz::with('questions.options')->findOrFail($quizId);
 
-        $existing = DB::table('form_submissions')
-            ->where('form_id', $formId)
+        $existing = QuizSubmission::where('quiz_id', $quizId)
             ->where('user_id', Auth::id())
             ->first();
             
         if ($existing) {
-            return response()->json(['message' => 'Bạn đã nộp bài này rồi!', 'score' => $existing->score, 'max_score' => $existing->max_score], 400);
+            return response()->json([
+                'message' => 'Bạn đã nộp bài này rồi!', 
+                'score' => $existing->total_score, 
+                'max_score' => $quiz->questions->sum('points')
+            ], 400);
         }
 
         $answers = $request->input('answers', []);
-        $schema = json_decode($form->schema, true);
         
         $totalScore = 0;
         $maxScore = 0;
         
-        if (isset($schema['questions'])) {
-            foreach ($schema['questions'] as $question) {
-                if ($question['type'] === 'text') continue;
-                
-                $maxScore += $question['points'] ?? 1;
-                
-                $qId = $question['id'];
-                $userAns = $answers[$qId] ?? [];
-                if (!is_array($userAns)) $userAns = [$userAns];
-                
-                $correctAns = $question['correct_answers'] ?? [];
-                
-                sort($userAns);
-                sort($correctAns);
-                
-                if ($userAns == $correctAns && count($correctAns) > 0) {
-                    $totalScore += $question['points'] ?? 1;
-                }
-            }
-        }
+        DB::transaction(function () use ($quiz, $answers, &$totalScore, &$maxScore) {
+            $submission = QuizSubmission::create([
+                'quiz_id' => $quiz->id,
+                'user_id' => Auth::id(),
+                'total_score' => 0,
+                'completed_at' => now(),
+            ]);
 
-        DB::table('form_submissions')->insert([
-            'form_id' => $formId,
-            'user_id' => Auth::id(),
-            'answers' => json_encode($answers),
-            'score' => $totalScore,
-            'max_score' => $maxScore,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+            foreach ($quiz->questions as $question) {
+                $maxScore += $question->points;
+                $userAns = $answers[$question->id] ?? null;
+                $isCorrect = false;
+                $pointsEarned = 0;
+                
+                if ($question->type === 'text') {
+                    $userText = trim(strtolower((string)$userAns));
+                    $correctText = trim(strtolower((string)$question->correct_text_answer));
+                    if ($userText !== '' && $userText === $correctText) {
+                        $isCorrect = true;
+                        $pointsEarned = $question->points;
+                    }
+
+                    $submission->answers()->create([
+                        'quiz_question_id' => $question->id,
+                        'text_answer' => (string)$userAns,
+                        'is_correct' => $isCorrect,
+                        'points_earned' => $pointsEarned,
+                    ]);
+                } else if ($question->type === 'radio') {
+                    $selectedId = $userAns ? (int)$userAns : null;
+                    if ($selectedId) {
+                        $option = $question->options->where('id', $selectedId)->first();
+                        if ($option && $option->is_correct) {
+                            $isCorrect = true;
+                            $pointsEarned = $question->points;
+                        }
+                        $submission->answers()->create([
+                            'quiz_question_id' => $question->id,
+                            'selected_option_id' => $selectedId,
+                            'is_correct' => $isCorrect,
+                            'points_earned' => $pointsEarned,
+                        ]);
+                    }
+                } else if ($question->type === 'checkbox') {
+                    $selectedIds = is_array($userAns) ? array_map('intval', $userAns) : [];
+                    $correctIds = $question->options->where('is_correct', true)->pluck('id')->toArray();
+                    
+                    sort($selectedIds);
+                    sort($correctIds);
+                    
+                    if (!empty($selectedIds) && $selectedIds === $correctIds) {
+                        $isCorrect = true;
+                        $pointsEarned = $question->points;
+                    }
+
+                    foreach ($selectedIds as $sId) {
+                        $submission->answers()->create([
+                            'quiz_question_id' => $question->id,
+                            'selected_option_id' => $sId,
+                            'is_correct' => in_array($sId, $correctIds),
+                            'points_earned' => 0, // for checkbox we'll just track total at submission or per answer
+                        ]);
+                    }
+                    
+                    // Update the last answer with points earned for the question, or distribute it.
+                    // A simple way is we already calculate total score.
+                }
+
+                $totalScore += $pointsEarned;
+            }
+
+            $submission->update(['total_score' => $totalScore]);
+        });
 
         return response()->json([
             'message' => 'Thành công',
@@ -151,4 +222,56 @@ class QuizController extends Controller
             'max_score' => $maxScore
         ]);
     }
+
+    public function results(Conversation $conversation, $quizId)
+    {
+        $userId = Auth::id();
+
+        if (!$conversation->participants()->where('user_id', $userId)->exists()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $quiz = Quiz::with([
+            'message', 
+            'submissions.user', 
+            'submissions.answers.question', 
+            'submissions.answers.selectedOption',
+            'questions.options'
+        ])->findOrFail($quizId);
+
+        $isOwner = $quiz->message && $quiz->message->user_id == $userId;
+
+        $submissions = $quiz->submissions->sortByDesc('total_score')->values()->map(function($sub) use ($isOwner) {
+            $data = [
+                'id' => $sub->id,
+                'user' => [
+                    'id' => $sub->user->id,
+                    'name' => $sub->user->name,
+                    'email' => $sub->user->email,
+                ],
+                'total_score' => $sub->total_score,
+                'completed_at' => $sub->completed_at ? $sub->completed_at->format('d/m/Y H:i') : null,
+            ];
+
+            if ($isOwner) {
+                $data['answers'] = $sub->answers->map(function($ans) {
+                    return [
+                        'question_text' => $ans->question->question_text,
+                        'is_correct' => $ans->is_correct,
+                        'points_earned' => $ans->points_earned,
+                        'answer_text' => $ans->question->type === 'text' ? $ans->text_answer : ($ans->selectedOption ? $ans->selectedOption->option_text : ''),
+                    ];
+                });
+            }
+
+            return $data;
+        });
+
+        return response()->json([
+            'quiz_title' => $quiz->title,
+            'is_owner' => $isOwner,
+            'submissions' => $submissions
+        ]);
+    }
 }
+
