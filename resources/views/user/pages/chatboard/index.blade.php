@@ -186,12 +186,23 @@
                                         @if($message->replyTo)
                                             <div onclick="scrollToMessage({{ $message->reply_to_id }})" class="cursor-pointer hover:opacity-100 transition-all mb-2 p-2 rounded-xl {{ $isMine ? 'bg-black/10' : 'bg-black/5 dark:bg-white/5' }} border-l-2 {{ $isMine ? 'border-white/50' : 'border-sky-500' }} text-[11px] opacity-80">
                                                 <div class="font-bold mb-0.5">{{ $message->replyTo->user->name }}</div>
-                                                <div class="truncate">{{ $message->replyTo->type === 'quiz' ? 'Bài kiểm tra: ' . $message->replyTo->body : $message->replyTo->body }}</div>
+                                                <div class="truncate">
+                                                    @if($message->replyTo->type === 'quiz')
+                                                        Bài kiểm tra: {{ $message->replyTo->body }}
+                                                    @elseif($message->replyTo->type === 'audio')
+                                                        [Tin nhắn thoại]
+                                                    @else
+                                                        {{ $message->replyTo->body }}
+                                                    @endif
+                                                </div>
                                             </div>
                                         @endif
                                         
                                         <!-- Nút Reply -->
-                                        <button onclick="prepareReply({{ $message->id }}, '{{ addslashes($message->user->name) }}', '{{ addslashes(str_replace(['\r', '\n'], ' ', \Illuminate\Support\Str::limit($message->type === 'quiz' ? 'Bài kiểm tra: '.$message->body : $message->body, 50))) }}')" class="absolute {{ $isMine ? 'right-full mr-2' : 'left-full ml-2' }} top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10" title="Trả lời">
+                                        @php
+                                            $replyPreview = $message->type === 'quiz' ? 'Bài kiểm tra: ' . $message->body : ($message->type === 'audio' ? '[Tin nhắn thoại]' : $message->body);
+                                        @endphp
+                                        <button onclick="prepareReply({{ $message->id }}, '{{ addslashes($message->user->name) }}', '{{ addslashes(str_replace(["\r", "\n"], ' ', \Illuminate\Support\Str::limit($replyPreview, 50))) }}')" class="absolute {{ $isMine ? 'right-full mr-2' : 'left-full ml-2' }} top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10" title="Trả lời">
                                             <i data-lucide="reply" class="w-3.5 h-3.5"></i>
                                         </button>
                                         @if($message->type === 'quiz')
@@ -219,6 +230,26 @@
                                                     </button>
                                                 </div>
                                             </div>
+                                        @elseif($message->type === 'audio')
+                                            <div class="flex items-center gap-3 py-1 min-w-[220px]">
+                                                <button type="button" onclick="toggleAudioPlay(this)" class="w-8 h-8 rounded-full {{ $isMine ? 'bg-white text-sky-600' : 'bg-sky-500 text-white' }} flex items-center justify-center shrink-0 shadow-sm transition-transform active:scale-95">
+                                                    <i data-lucide="play" class="w-4 h-4 ml-0.5 audio-play-icon"></i>
+                                                    <i data-lucide="pause" class="w-4 h-4 hidden audio-pause-icon"></i>
+                                                </button>
+                                                <div class="flex-1 flex flex-col justify-center">
+                                                    <div class="w-full bg-black/10 dark:bg-white/10 h-1.5 rounded-full overflow-hidden cursor-pointer audio-progress-container" onclick="seekAudio(event, this)">
+                                                        <div class="bg-current h-full w-0 rounded-full transition-all duration-100 audio-progress-bar"></div>
+                                                    </div>
+                                                    <div class="flex justify-between items-center mt-1 text-[10px] opacity-75">
+                                                        <span class="audio-current-time">0:00</span>
+                                                        <span class="audio-duration">--:--</span>
+                                                    </div>
+                                                </div>
+                                                <audio src="{{ $message->file_url ?? asset('storage/' . $message->file_path) }}" preload="metadata" class="hidden audio-element" ontimeupdate="updateAudioProgress(this)" onloadedmetadata="initAudioDuration(this)" onended="onAudioEnded(this)"></audio>
+                                            </div>
+                                            @if($message->body)
+                                                <p class="mt-1.5 text-xs">{!! nl2br(e($message->body)) !!}</p>
+                                            @endif
                                         @else
                                             {!! nl2br(e($message->body)) !!}
                                         @endif
@@ -249,10 +280,46 @@
                     <div class="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-1 relative">
                         <textarea id="chat-input" rows="1" class="w-full bg-transparent px-3 py-2 text-sm focus:outline-none dark:text-white resize-none max-h-32" placeholder="Nhập tin nhắn..." onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendChatMessage(event); }"></textarea>
                     </div>
-                    <button type="submit" class="p-3 bg-sky-500 hover:bg-sky-600 text-white rounded-xl shadow-md shadow-sky-500/20 transition-all flex items-center justify-center">
+                    <button type="button" id="btn-record-voice" onclick="startVoiceRecording()" class="p-3 text-slate-400 hover:text-sky-500 transition-colors rounded-xl flex items-center justify-center shrink-0" title="Ghi âm">
+                        <i data-lucide="mic" class="w-5 h-5"></i>
+                    </button>
+                    <button type="submit" class="p-3 bg-sky-500 hover:bg-sky-600 text-white rounded-xl shadow-md shadow-sky-500/20 transition-all flex items-center justify-center shrink-0">
                         <i data-lucide="send" class="w-5 h-5 ml-1"></i>
                     </button>
                 </form>
+
+                <div id="voice-recording-container" class="hidden items-center gap-3 w-full bg-slate-50 dark:bg-slate-800 border border-sky-400/50 dark:border-sky-500/50 rounded-2xl p-2 px-4">
+                    <button type="button" onclick="cancelVoiceRecording()" class="p-2 text-slate-400 hover:text-rose-500 transition-colors rounded-xl flex items-center justify-center shrink-0" title="Hủy">
+                        <i data-lucide="trash-2" class="w-5 h-5"></i>
+                    </button>
+                    <div id="recording-active-view" class="flex-1 flex items-center gap-3">
+                        <span class="w-3 h-3 rounded-full bg-rose-500 animate-pulse shrink-0"></span>
+                        <span id="recording-timer" class="text-xs font-mono font-bold text-slate-700 dark:text-slate-200 shrink-0">00:00</span>
+                        <div class="flex-1 flex items-center gap-1 h-4 overflow-hidden opacity-60">
+                            <span class="w-1 bg-rose-500 rounded-full animate-pulse h-2"></span>
+                            <span class="w-1 bg-rose-500 rounded-full animate-pulse h-4"></span>
+                            <span class="w-1 bg-rose-500 rounded-full animate-pulse h-3"></span>
+                            <span class="w-1 bg-rose-500 rounded-full animate-pulse h-2"></span>
+                            <span class="w-1 bg-rose-500 rounded-full animate-pulse h-4"></span>
+                        </div>
+                        <button type="button" onclick="stopAndPreviewVoiceRecording()" class="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors shrink-0">
+                            <i data-lucide="square" class="w-3.5 h-3.5"></i>
+                            Nghe thử
+                        </button>
+                    </div>
+                    <div id="recording-preview-view" class="hidden flex-1 flex items-center gap-3">
+                        <button type="button" onclick="togglePreviewAudio()" class="w-8 h-8 rounded-full bg-sky-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                            <i data-lucide="play" id="preview-play-icon" class="w-4 h-4 ml-0.5"></i>
+                            <i data-lucide="pause" id="preview-pause-icon" class="w-4 h-4 hidden"></i>
+                        </button>
+                        <span id="preview-timer" class="text-xs font-mono text-slate-600 dark:text-slate-300 shrink-0">00:00</span>
+                        <audio id="preview-audio-element" class="hidden" ontimeupdate="updatePreviewTimer()" onended="onPreviewAudioEnded()"></audio>
+                        <div class="flex-1 text-xs text-slate-400 truncate">Sẵn sàng gửi</div>
+                    </div>
+                    <button type="button" onclick="sendVoiceMessage()" class="p-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl shadow-md shadow-sky-500/20 transition-all flex items-center justify-center shrink-0" title="Gửi ghi âm">
+                        <i data-lucide="send" class="w-4 h-4 ml-0.5"></i>
+                    </button>
+                </div>
             </div>
         @else
             <div class="flex-1 flex flex-col items-center justify-center text-slate-400">
@@ -619,6 +686,364 @@
     }
 
     @if(isset($activeConversation))
+        function formatAudioTime(seconds) {
+            if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${m}:${s < 10 ? '0' : ''}${s}`;
+        }
+
+        function toggleAudioPlay(btn) {
+            const container = btn.closest('.min-w-\\[220px\\]');
+            if (!container) return;
+            const audio = container.querySelector('.audio-element');
+            const playIcon = btn.querySelector('.audio-play-icon');
+            const pauseIcon = btn.querySelector('.audio-pause-icon');
+
+            if (!audio) return;
+
+            if (audio.paused) {
+                document.querySelectorAll('.audio-element').forEach(otherAudio => {
+                    if (otherAudio !== audio && !otherAudio.paused) {
+                        otherAudio.pause();
+                        const otherContainer = otherAudio.closest('.min-w-\\[220px\\]');
+                        if (otherContainer) {
+                            const otherPlay = otherContainer.querySelector('.audio-play-icon');
+                            const otherPause = otherContainer.querySelector('.audio-pause-icon');
+                            if (otherPlay) otherPlay.classList.remove('hidden');
+                            if (otherPause) otherPause.classList.add('hidden');
+                        }
+                    }
+                });
+
+                audio.play().then(() => {
+                    if (playIcon) playIcon.classList.add('hidden');
+                    if (pauseIcon) pauseIcon.classList.remove('hidden');
+                }).catch(() => {});
+            } else {
+                audio.pause();
+                if (playIcon) playIcon.classList.remove('hidden');
+                if (pauseIcon) pauseIcon.classList.add('hidden');
+            }
+        }
+
+        function updateAudioProgress(audio) {
+            const container = audio.closest('.min-w-\\[220px\\]');
+            if (!container) return;
+            const progressBar = container.querySelector('.audio-progress-bar');
+            const currentTimeEl = container.querySelector('.audio-current-time');
+            const durationEl = container.querySelector('.audio-duration');
+
+            if (progressBar && audio.duration) {
+                const percent = (audio.currentTime / audio.duration) * 100;
+                progressBar.style.width = percent + '%';
+            }
+
+            if (currentTimeEl) {
+                currentTimeEl.innerText = formatAudioTime(audio.currentTime);
+            }
+
+            if (durationEl && (!durationEl.dataset.initialized || durationEl.innerText === '--:--')) {
+                if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+                    durationEl.innerText = formatAudioTime(audio.duration);
+                    durationEl.dataset.initialized = 'true';
+                }
+            }
+        }
+
+        function initAudioDuration(audio) {
+            const container = audio.closest('.min-w-\\[220px\\]');
+            if (!container) return;
+            const durationEl = container.querySelector('.audio-duration');
+            if (durationEl && audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+                durationEl.innerText = formatAudioTime(audio.duration);
+                durationEl.dataset.initialized = 'true';
+            }
+        }
+
+        function onAudioEnded(audio) {
+            const container = audio.closest('.min-w-\\[220px\\]');
+            if (!container) return;
+            const playIcon = container.querySelector('.audio-play-icon');
+            const pauseIcon = container.querySelector('.audio-pause-icon');
+            const progressBar = container.querySelector('.audio-progress-bar');
+            const currentTimeEl = container.querySelector('.audio-current-time');
+
+            if (playIcon) playIcon.classList.remove('hidden');
+            if (pauseIcon) pauseIcon.classList.add('hidden');
+            if (progressBar) progressBar.style.width = '0%';
+            if (currentTimeEl) currentTimeEl.innerText = '0:00';
+            audio.currentTime = 0;
+        }
+
+        function seekAudio(event, barContainer) {
+            const container = barContainer.closest('.min-w-\\[220px\\]');
+            if (!container) return;
+            const audio = container.querySelector('.audio-element');
+            if (!audio || !audio.duration) return;
+
+            const rect = barContainer.getBoundingClientRect();
+            const clickX = event.clientX - rect.left;
+            const percent = Math.max(0, Math.min(1, clickX / rect.width));
+            audio.currentTime = percent * audio.duration;
+        }
+
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recordingStream = null;
+        let recordTimerInterval = null;
+        let recordSeconds = 0;
+        let recordedAudioBlob = null;
+        let previewObjectUrl = null;
+
+        function stopRecordingStream() {
+            if (recordingStream) {
+                recordingStream.getTracks().forEach(track => track.stop());
+                recordingStream = null;
+            }
+        }
+
+        async function startVoiceRecording() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                Toastify({text: "Trình duyệt không hỗ trợ ghi âm", style: {background: "#f43f5e"}}).showToast();
+                return;
+            }
+
+            try {
+                audioChunks = [];
+                recordedAudioBlob = null;
+                recordSeconds = 0;
+
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                recordingStream = stream;
+
+                let options = {};
+                if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                    options.mimeType = 'audio/webm;codecs=opus';
+                } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+                    options.mimeType = 'audio/webm';
+                } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+                    options.mimeType = 'audio/ogg;codecs=opus';
+                } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                    options.mimeType = 'audio/mp4';
+                }
+
+                mediaRecorder = new MediaRecorder(stream, options);
+
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) {
+                        audioChunks.push(e.data);
+                    }
+                };
+
+                mediaRecorder.onstop = () => {
+                    const mime = mediaRecorder.mimeType || 'audio/webm';
+                    recordedAudioBlob = new Blob(audioChunks, { type: mime });
+                };
+
+                mediaRecorder.start(200);
+
+                const chatForm = document.getElementById('chat-form');
+                const voiceContainer = document.getElementById('voice-recording-container');
+                const activeView = document.getElementById('recording-active-view');
+                const previewView = document.getElementById('recording-preview-view');
+                const timerEl = document.getElementById('recording-timer');
+
+                if (chatForm) chatForm.classList.add('hidden');
+                if (voiceContainer) {
+                    voiceContainer.classList.remove('hidden');
+                    voiceContainer.classList.add('flex');
+                }
+                if (activeView) activeView.classList.remove('hidden');
+                if (previewView) previewView.classList.add('hidden');
+                if (timerEl) timerEl.innerText = '00:00';
+
+                clearInterval(recordTimerInterval);
+                recordTimerInterval = setInterval(() => {
+                    recordSeconds++;
+                    const m = Math.floor(recordSeconds / 60);
+                    const s = recordSeconds % 60;
+                    if (timerEl) {
+                        timerEl.innerText = `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+                    }
+                }, 1000);
+
+                lucide.createIcons();
+            } catch (err) {
+                stopRecordingStream();
+                Toastify({text: "Không thể truy cập microphone. Vui lòng cấp quyền!", style: {background: "#f43f5e"}}).showToast();
+            }
+        }
+
+        function cancelVoiceRecording() {
+            clearInterval(recordTimerInterval);
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.onstop = null;
+                mediaRecorder.stop();
+            }
+            stopRecordingStream();
+
+            if (previewObjectUrl) {
+                URL.revokeObjectURL(previewObjectUrl);
+                previewObjectUrl = null;
+            }
+
+            const previewAudio = document.getElementById('preview-audio-element');
+            if (previewAudio) {
+                previewAudio.pause();
+                previewAudio.src = '';
+            }
+
+            audioChunks = [];
+            recordedAudioBlob = null;
+            recordSeconds = 0;
+
+            const chatForm = document.getElementById('chat-form');
+            const voiceContainer = document.getElementById('voice-recording-container');
+            if (voiceContainer) {
+                voiceContainer.classList.add('hidden');
+                voiceContainer.classList.remove('flex');
+            }
+            if (chatForm) chatForm.classList.remove('hidden');
+        }
+
+        function stopAndPreviewVoiceRecording() {
+            clearInterval(recordTimerInterval);
+
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.onstop = () => {
+                    const mime = mediaRecorder.mimeType || 'audio/webm';
+                    recordedAudioBlob = new Blob(audioChunks, { type: mime });
+                    setupPreviewAudio();
+                };
+                mediaRecorder.stop();
+            } else if (recordedAudioBlob) {
+                setupPreviewAudio();
+            }
+
+            stopRecordingStream();
+        }
+
+        function setupPreviewAudio() {
+            if (!recordedAudioBlob) return;
+            if (previewObjectUrl) {
+                URL.revokeObjectURL(previewObjectUrl);
+            }
+            previewObjectUrl = URL.createObjectURL(recordedAudioBlob);
+
+            const previewAudio = document.getElementById('preview-audio-element');
+            const activeView = document.getElementById('recording-active-view');
+            const previewView = document.getElementById('recording-preview-view');
+            const previewTimer = document.getElementById('preview-timer');
+
+            if (previewAudio) {
+                previewAudio.src = previewObjectUrl;
+            }
+            if (activeView) activeView.classList.add('hidden');
+            if (previewView) previewView.classList.remove('hidden');
+            if (previewTimer) previewTimer.innerText = '00:00';
+
+            lucide.createIcons();
+        }
+
+        function togglePreviewAudio() {
+            const previewAudio = document.getElementById('preview-audio-element');
+            const playIcon = document.getElementById('preview-play-icon');
+            const pauseIcon = document.getElementById('preview-pause-icon');
+
+            if (!previewAudio) return;
+
+            if (previewAudio.paused) {
+                previewAudio.play().then(() => {
+                    if (playIcon) playIcon.classList.add('hidden');
+                    if (pauseIcon) pauseIcon.classList.remove('hidden');
+                }).catch(() => {});
+            } else {
+                previewAudio.pause();
+                if (playIcon) playIcon.classList.remove('hidden');
+                if (pauseIcon) pauseIcon.classList.add('hidden');
+            }
+        }
+
+        function updatePreviewTimer() {
+            const previewAudio = document.getElementById('preview-audio-element');
+            const timerEl = document.getElementById('preview-timer');
+            if (previewAudio && timerEl) {
+                timerEl.innerText = formatAudioTime(previewAudio.currentTime);
+            }
+        }
+
+        function onPreviewAudioEnded() {
+            const playIcon = document.getElementById('preview-play-icon');
+            const pauseIcon = document.getElementById('preview-pause-icon');
+            const timerEl = document.getElementById('preview-timer');
+            if (playIcon) playIcon.classList.remove('hidden');
+            if (pauseIcon) pauseIcon.classList.add('hidden');
+            if (timerEl) timerEl.innerText = '00:00';
+        }
+
+        async function sendVoiceMessage() {
+            clearInterval(recordTimerInterval);
+
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.onstop = async () => {
+                    const mime = mediaRecorder.mimeType || 'audio/webm';
+                    recordedAudioBlob = new Blob(audioChunks, { type: mime });
+                    stopRecordingStream();
+                    await submitVoicePayload();
+                };
+                mediaRecorder.stop();
+            } else {
+                stopRecordingStream();
+                await submitVoicePayload();
+            }
+        }
+
+        async function submitVoicePayload() {
+            if (!recordedAudioBlob) {
+                cancelVoiceRecording();
+                return;
+            }
+
+            const replyInput = document.getElementById('reply-to-id');
+            const replyToId = replyInput ? replyInput.value : '';
+
+            const formData = new FormData();
+            const extension = recordedAudioBlob.type.includes('ogg') ? 'ogg' : (recordedAudioBlob.type.includes('mp4') ? 'mp4' : 'webm');
+            formData.append('audio', recordedAudioBlob, `voice_note.${extension}`);
+
+            if (replyToId) {
+                formData.append('reply_to_id', replyToId);
+            }
+
+            try {
+                const headers = {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                };
+                if (typeof window.Echo !== 'undefined' && window.Echo.socketId()) {
+                    headers['X-Socket-ID'] = window.Echo.socketId();
+                }
+
+                cancelReply();
+                cancelVoiceRecording();
+
+                const res = await fetch('{{ route('app.conversation.message.store', $activeConversation->id) }}', {
+                    method: 'POST',
+                    headers: headers,
+                    body: formData
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    appendMessageToChat(data);
+                } else {
+                    Toastify({text: "Lỗi gửi tin nhắn ghi âm", style: {background: "#f43f5e"}}).showToast();
+                }
+            } catch (err) {
+                Toastify({text: "Lỗi kết nối máy chủ", style: {background: "#f43f5e"}}).showToast();
+            }
+        }
+
         function appendMessageToChat(message) {
             const chatContainer = document.getElementById('chat-messages-container');
             if(!chatContainer) return;
@@ -627,10 +1052,16 @@
 
             let innerContent = '';
             if (message.reply_to) {
+                let replyText = message.reply_to.body;
+                if (message.reply_to.type === 'quiz') {
+                    replyText = 'Bài kiểm tra: ' + message.reply_to.body;
+                } else if (message.reply_to.type === 'audio') {
+                    replyText = '[Tin nhắn thoại]';
+                }
                 innerContent += `
                     <div onclick="scrollToMessage(${message.reply_to_id})" class="cursor-pointer hover:opacity-100 transition-all mb-2 p-2 rounded-xl ${isMine ? 'bg-black/10' : 'bg-black/5 dark:bg-white/5'} border-l-2 ${isMine ? 'border-white/50' : 'border-sky-500'} text-[11px] opacity-80">
                         <div class="font-bold mb-0.5">${message.reply_to.user ? message.reply_to.user.name : ''}</div>
-                        <div class="truncate">${message.reply_to.type === 'quiz' ? 'Bài kiểm tra: ' + message.reply_to.body : message.reply_to.body}</div>
+                        <div class="truncate">${replyText || ''}</div>
                     </div>
                 `;
             }
@@ -653,9 +1084,34 @@
                         </div>
                     </div>
                 `;
+            } else if (message.type === 'audio') {
+                const audioSrc = message.file_url || (message.file_path ? `/storage/${message.file_path}` : '');
+                innerContent += `
+                    <div class="flex items-center gap-3 py-1 min-w-[220px]">
+                        <button type="button" onclick="toggleAudioPlay(this)" class="w-8 h-8 rounded-full ${isMine ? 'bg-white text-sky-600' : 'bg-sky-500 text-white'} flex items-center justify-center shrink-0 shadow-sm transition-transform active:scale-95">
+                            <i data-lucide="play" class="w-4 h-4 ml-0.5 audio-play-icon"></i>
+                            <i data-lucide="pause" class="w-4 h-4 hidden audio-pause-icon"></i>
+                        </button>
+                        <div class="flex-1 flex flex-col justify-center">
+                            <div class="w-full bg-black/10 dark:bg-white/10 h-1.5 rounded-full overflow-hidden cursor-pointer audio-progress-container" onclick="seekAudio(event, this)">
+                                <div class="bg-current h-full w-0 rounded-full transition-all duration-100 audio-progress-bar"></div>
+                            </div>
+                            <div class="flex justify-between items-center mt-1 text-[10px] opacity-75">
+                                <span class="audio-current-time">0:00</span>
+                                <span class="audio-duration">--:--</span>
+                            </div>
+                        </div>
+                        <audio src="${audioSrc}" preload="metadata" class="hidden audio-element" ontimeupdate="updateAudioProgress(this)" onloadedmetadata="initAudioDuration(this)" onended="onAudioEnded(this)"></audio>
+                    </div>
+                `;
+                if (message.body) {
+                    innerContent += `<p class="mt-1.5 text-xs">${(message.body || '').replace(/\n/g, "<br>")}</p>`;
+                }
             } else {
                 innerContent += (message.body || '').replace(/\n/g, "<br>");
             }
+
+            const replyTooltip = message.type === 'quiz' ? 'Bài kiểm tra: ' + (message.body || '') : (message.type === 'audio' ? '[Tin nhắn thoại]' : (message.body || ''));
 
             const messageHtml = `
                 <div id="msg-${message.id}" class="flex ${isMine ? 'justify-end' : 'justify-start'}">
@@ -678,7 +1134,7 @@
                             `}
                             <div class="${isMine ? 'bg-sky-500 text-white rounded-tr-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-sm'} px-4 py-2.5 rounded-2xl text-xs max-w-md relative group">
                                 ${innerContent}
-                                <button onclick="prepareReply(${message.id}, '${(message.user.name || '').replace(/'/g, '\\\'')}', '${(message.type === 'quiz' ? 'Bài kiểm tra: ' + message.body : message.body || '').replace(/'/g, '\\\'').replace(/\r\n|\n|\r/g, ' ').substring(0, 50)}')" class="absolute ${isMine ? 'right-full mr-2' : 'left-full ml-2'} top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10" title="Trả lời">
+                                <button onclick="prepareReply(${message.id}, '${(message.user.name || '').replace(/'/g, '\\\'')}', '${replyTooltip.replace(/'/g, '\\\'').replace(/\r\n|\n|\r/g, ' ').substring(0, 50)}')" class="absolute ${isMine ? 'right-full mr-2' : 'left-full ml-2'} top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10" title="Trả lời">
                                     <i data-lucide="reply" class="w-3.5 h-3.5"></i>
                                 </button>
                             </div>
