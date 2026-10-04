@@ -24,6 +24,7 @@ class MessageController extends Controller
             }
 
             $hasAudio = $request->hasFile('audio');
+            $hasImage = $request->hasFile('image');
 
             if ($hasAudio) {
                 $request->validate([
@@ -34,6 +35,15 @@ class MessageController extends Controller
 
                 $filePath = $request->file('audio')->store('audios', 'public');
                 $type = 'audio';
+            } elseif ($hasImage) {
+                $request->validate([
+                    'image' => ['required', 'file', 'image', 'mimes:jpeg,png,jpg,webp,gif', 'max:10240'],
+                    'body' => 'nullable|string|max:2000',
+                    'reply_to_id' => 'nullable|exists:messages,id',
+                ]);
+
+                $filePath = $request->file('image')->store('images', 'public');
+                $type = 'image';
             } else {
                 $request->validate([
                     'body' => 'required|string|max:2000',

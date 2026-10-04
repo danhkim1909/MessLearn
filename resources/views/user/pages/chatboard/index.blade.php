@@ -191,6 +191,8 @@
                                                         Bài kiểm tra: {{ $message->replyTo->body }}
                                                     @elseif($message->replyTo->type === 'audio')
                                                         [Tin nhắn thoại]
+                                                    @elseif($message->replyTo->type === 'image')
+                                                        [Hình ảnh] {{ $message->replyTo->body ? ': ' . $message->replyTo->body : '' }}
                                                     @else
                                                         {{ $message->replyTo->body }}
                                                     @endif
@@ -200,7 +202,7 @@
                                         
                                         <!-- Nút Reply -->
                                         @php
-                                            $replyPreview = $message->type === 'quiz' ? 'Bài kiểm tra: ' . $message->body : ($message->type === 'audio' ? '[Tin nhắn thoại]' : $message->body);
+                                            $replyPreview = $message->type === 'quiz' ? 'Bài kiểm tra: ' . $message->body : ($message->type === 'audio' ? '[Tin nhắn thoại]' : ($message->type === 'image' ? '[Hình ảnh]' : $message->body));
                                         @endphp
                                         <button onclick="prepareReply({{ $message->id }}, '{{ addslashes($message->user->name) }}', '{{ addslashes(str_replace(["\r", "\n"], ' ', \Illuminate\Support\Str::limit($replyPreview, 50))) }}')" class="absolute {{ $isMine ? 'right-full mr-2' : 'left-full ml-2' }} top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10" title="Trả lời">
                                             <i data-lucide="reply" class="w-3.5 h-3.5"></i>
@@ -250,6 +252,23 @@
                                             @if($message->body)
                                                 <p class="mt-1.5 text-xs">{!! nl2br(e($message->body)) !!}</p>
                                             @endif
+                                        @elseif($message->type === 'image')
+                                            <div class="space-y-1.5">
+                                                <div class="relative group/img overflow-hidden rounded-xl border border-black/5 dark:border-white/5 bg-black/5 max-w-xs sm:max-w-sm">
+                                                    <img src="{{ $message->file_url ?? asset('storage/' . $message->file_path) }}" alt="Hình ảnh" class="max-h-72 w-auto max-w-full rounded-xl object-cover cursor-pointer hover:opacity-95 transition-opacity" onclick="openLightbox('{{ $message->file_url ?? asset('storage/' . $message->file_path) }}')">
+                                                    <div class="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover/img:opacity-100 transition-opacity bg-slate-900/75 backdrop-blur-xs p-1 rounded-lg">
+                                                        <button type="button" onclick="openImageAnnotator('{{ $message->file_url ?? asset('storage/' . $message->file_path) }}', {{ $message->id }})" class="p-1.5 text-white hover:text-sky-400 transition-colors rounded" title="Vẽ chú thích lên ảnh">
+                                                            <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i>
+                                                        </button>
+                                                        <button type="button" onclick="openLightbox('{{ $message->file_url ?? asset('storage/' . $message->file_path) }}')" class="p-1.5 text-white hover:text-sky-400 transition-colors rounded" title="Xem ảnh lớn">
+                                                            <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                @if($message->body)
+                                                    <p class="text-xs pt-1">{!! nl2br(e($message->body)) !!}</p>
+                                                @endif
+                                            </div>
                                         @else
                                             {!! nl2br(e($message->body)) !!}
                                         @endif
@@ -272,9 +291,28 @@
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
+
+                <div id="image-preview-container" class="hidden mb-3 mx-12 p-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl items-center gap-3">
+                    <div class="relative w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700">
+                        <img id="image-preview-thumbnail" src="" class="w-full h-full object-cover">
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <span id="image-preview-filename" class="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate block"></span>
+                        <span class="text-[10px] text-slate-400">Ảnh đính kèm</span>
+                    </div>
+                    <button type="button" onclick="annotateSelectedImage()" class="px-2.5 py-1.5 bg-sky-50 dark:bg-sky-900/30 text-sky-500 hover:bg-sky-100 dark:hover:bg-sky-900/50 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors shrink-0" title="Vẽ chú thích trước khi gửi">
+                        <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i>
+                        Vẽ lên ảnh
+                    </button>
+                    <button type="button" onclick="cancelImageSelection()" class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shrink-0">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
                 <form id="chat-form" class="flex items-end gap-2" onsubmit="sendChatMessage(event)">
                     <input type="hidden" id="reply-to-id" value="">
-                    <button type="button" class="p-3 text-slate-400 hover:text-sky-500 transition-colors">
+                    <input type="file" id="image-file-input" accept="image/*" class="hidden" onchange="handleImageSelected(event)">
+                    <button type="button" onclick="document.getElementById('image-file-input').click()" class="p-3 text-slate-400 hover:text-sky-500 transition-colors" title="Đính kèm ảnh">
                         <i data-lucide="paperclip" class="w-5 h-5"></i>
                     </button>
                     <div class="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-1 relative">
@@ -428,6 +466,14 @@
         </div>
     </aside>
     @endif
+</div>
+
+<!-- MODAL: LIGHTBOX XEM ANH LON -->
+<div id="modal-lightbox" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 hidden items-center justify-center p-4" onclick="closeLightbox()">
+    <button type="button" onclick="closeLightbox()" class="absolute top-4 right-4 p-2 text-white/70 hover:text-white rounded-full bg-white/10 hover:bg-white/20 transition-colors z-10" title="Đóng">
+        <i data-lucide="x" class="w-6 h-6"></i>
+    </button>
+    <img id="lightbox-img" src="" class="max-w-[90vw] max-h-[85vh] rounded-2xl object-contain shadow-2xl transition-transform" onclick="event.stopPropagation()">
 </div>
 
 <!-- MODAL: TẠO FORM CUSTOM -->
@@ -589,6 +635,7 @@
 @endsection
 
 @section('scripts')
+<script src="https://unpkg.com/painterro@1.2.55/build/painterro.min.js"></script>
 <script>
     function openModal(id) {
         document.getElementById(id).classList.remove('hidden');
@@ -1057,6 +1104,8 @@
                     replyText = 'Bài kiểm tra: ' + message.reply_to.body;
                 } else if (message.reply_to.type === 'audio') {
                     replyText = '[Tin nhắn thoại]';
+                } else if (message.reply_to.type === 'image') {
+                    replyText = '[Hình ảnh]' + (message.reply_to.body ? ': ' + message.reply_to.body : '');
                 }
                 innerContent += `
                     <div onclick="scrollToMessage(${message.reply_to_id})" class="cursor-pointer hover:opacity-100 transition-all mb-2 p-2 rounded-xl ${isMine ? 'bg-black/10' : 'bg-black/5 dark:bg-white/5'} border-l-2 ${isMine ? 'border-white/50' : 'border-sky-500'} text-[11px] opacity-80">
@@ -1107,11 +1156,36 @@
                 if (message.body) {
                     innerContent += `<p class="mt-1.5 text-xs">${(message.body || '').replace(/\n/g, "<br>")}</p>`;
                 }
+            } else if (message.type === 'image') {
+                const imgSrc = message.file_url || (message.file_path ? `/storage/${message.file_path}` : '');
+                innerContent += `
+                    <div class="space-y-1.5">
+                        <div class="relative group/img overflow-hidden rounded-xl border border-black/5 dark:border-white/5 bg-black/5 max-w-xs sm:max-w-sm">
+                            <img src="${imgSrc}" alt="Hình ảnh" class="max-h-72 w-auto max-w-full rounded-xl object-cover cursor-pointer hover:opacity-95 transition-opacity" onclick="openLightbox('${imgSrc}')">
+                            <div class="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover/img:opacity-100 transition-opacity bg-slate-900/75 backdrop-blur-xs p-1 rounded-lg">
+                                <button type="button" onclick="openImageAnnotator('${imgSrc}', ${message.id})" class="p-1.5 text-white hover:text-sky-400 transition-colors rounded" title="Vẽ chú thích lên ảnh">
+                                    <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i>
+                                </button>
+                                <button type="button" onclick="openLightbox('${imgSrc}')" class="p-1.5 text-white hover:text-sky-400 transition-colors rounded" title="Xem ảnh lớn">
+                                    <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                        </div>
+                        ${message.body ? `<p class="text-xs pt-1">${(message.body || '').replace(/\n/g, "<br>")}</p>` : ''}
+                    </div>
+                `;
             } else {
                 innerContent += (message.body || '').replace(/\n/g, "<br>");
             }
 
-            const replyTooltip = message.type === 'quiz' ? 'Bài kiểm tra: ' + (message.body || '') : (message.type === 'audio' ? '[Tin nhắn thoại]' : (message.body || ''));
+            let replyTooltip = message.body || '';
+            if (message.type === 'quiz') {
+                replyTooltip = 'Bài kiểm tra: ' + (message.body || '');
+            } else if (message.type === 'audio') {
+                replyTooltip = '[Tin nhắn thoại]';
+            } else if (message.type === 'image') {
+                replyTooltip = '[Hình ảnh]' + (message.body ? ': ' + message.body : '');
+            }
 
             const messageHtml = `
                 <div id="msg-${message.id}" class="flex ${isMine ? 'justify-end' : 'justify-start'}">
@@ -1148,6 +1222,147 @@
             lucide.createIcons();
         }
 
+        let selectedImageFile = null;
+        let selectedImageUrl = null;
+        let painterroInstance = null;
+        let currentAnnotateReplyId = null;
+
+        function handleImageSelected(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!file.type.startsWith('image/')) {
+                Toastify({ text: "Vui lòng chọn tệp hình ảnh hợp lệ", style: { background: "#f43f5e" } }).showToast();
+                return;
+            }
+
+            if (file.size > 10 * 1024 * 1024) {
+                Toastify({ text: "Kích thước ảnh tối đa 10MB", style: { background: "#f43f5e" } }).showToast();
+                return;
+            }
+
+            selectedImageFile = file;
+            if (selectedImageUrl) {
+                URL.revokeObjectURL(selectedImageUrl);
+            }
+            selectedImageUrl = URL.createObjectURL(file);
+
+            document.getElementById('image-preview-thumbnail').src = selectedImageUrl;
+            document.getElementById('image-preview-filename').innerText = file.name;
+            const container = document.getElementById('image-preview-container');
+            container.classList.remove('hidden');
+            container.classList.add('flex');
+
+            document.getElementById('chat-input').focus();
+            lucide.createIcons();
+        }
+
+        function cancelImageSelection() {
+            selectedImageFile = null;
+            if (selectedImageUrl) {
+                URL.revokeObjectURL(selectedImageUrl);
+                selectedImageUrl = null;
+            }
+            const input = document.getElementById('image-file-input');
+            if (input) input.value = '';
+
+            const container = document.getElementById('image-preview-container');
+            if (container) {
+                container.classList.add('hidden');
+                container.classList.remove('flex');
+            }
+        }
+
+        function annotateSelectedImage() {
+            if (!selectedImageUrl) return;
+            const replyInput = document.getElementById('reply-to-id');
+            const replyToId = replyInput ? replyInput.value : null;
+            openImageAnnotator(selectedImageUrl, replyToId);
+        }
+
+        function openImageAnnotator(imageUrl, replyToId = null) {
+            currentAnnotateReplyId = replyToId;
+
+            if (!painterroInstance) {
+                painterroInstance = Painterro({
+                    activeColor: '#ef4444',
+                    activeColorAlpha: 1,
+                    defaultTool: 'brush',
+                    saveByEnter: false,
+                    colorScheme: {
+                        main: '#0ea5e9',
+                        control: '#ffffff'
+                    },
+                    saveHandler: async function (image, done) {
+                        try {
+                            const blob = image.asBlob('image/png');
+                            await submitImagePayload(blob, currentAnnotateReplyId);
+                            done(true);
+                        } catch (err) {
+                            Toastify({ text: "Lỗi lưu ảnh", style: { background: "#f43f5e" } }).showToast();
+                            done(false);
+                        }
+                    }
+                });
+            }
+
+            painterroInstance.show(imageUrl);
+        }
+
+        async function submitImagePayload(blobOrFile, replyToId = null, caption = '') {
+            const formData = new FormData();
+            formData.append('image', blobOrFile, 'annotated_image.png');
+
+            if (replyToId) {
+                formData.append('reply_to_id', replyToId);
+            }
+            if (caption) {
+                formData.append('body', caption);
+            }
+
+            const headers = {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            };
+            if (typeof window.Echo !== 'undefined' && window.Echo.socketId()) {
+                headers['X-Socket-ID'] = window.Echo.socketId();
+            }
+
+            cancelImageSelection();
+            cancelReply();
+
+            const res = await fetch('{{ route('app.conversation.message.store', $activeConversation->id ?? 0) }}', {
+                method: 'POST',
+                headers: headers,
+                body: formData
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                appendMessageToChat(data);
+            } else {
+                Toastify({ text: "Lỗi gửi ảnh", style: { background: "#f43f5e" } }).showToast();
+            }
+        }
+
+        function openLightbox(url) {
+            const modal = document.getElementById('modal-lightbox');
+            const img = document.getElementById('lightbox-img');
+            if (modal && img) {
+                img.src = url;
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
+        }
+
+        function closeLightbox() {
+            const modal = document.getElementById('modal-lightbox');
+            const img = document.getElementById('lightbox-img');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                if (img) img.src = '';
+            }
+        }
 
         function scrollToMessage(id) {
             const el = document.getElementById('msg-' + id);
@@ -1183,6 +1398,18 @@
             const text = input.value.trim();
             const replyToId = replyInput ? replyInput.value : '';
             
+            if (selectedImageFile) {
+                const fileToSend = selectedImageFile;
+                const caption = text;
+                input.value = '';
+                input.style.height = 'auto';
+                cancelReply();
+                cancelImageSelection();
+                input.focus();
+                await submitImagePayload(fileToSend, replyToId, caption);
+                return;
+            }
+
             if (!text) return;
 
             input.value = '';
