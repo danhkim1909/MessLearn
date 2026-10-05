@@ -47,9 +47,11 @@
 <script src="https://unpkg.com/painterro@1.2.55/build/painterro.min.js"></script>
 
 {{-- Scripts Modules --}}
-@include('user.pages.chatboard.partials.scripts.voice-audio')
-@include('user.pages.chatboard.partials.scripts.image-canvas')
-@include('user.pages.chatboard.partials.scripts.mini-games')
-@include('user.pages.chatboard.partials.scripts.quiz')
+@if(isset($activeConversation))
+    @include('user.pages.chatboard.partials.scripts.voice-audio')
+    @include('user.pages.chatboard.partials.scripts.image-canvas')
+    @include('user.pages.chatboard.partials.scripts.mini-games')
+    @include('user.pages.chatboard.partials.scripts.quiz')
+@endif
 @include('user.pages.chatboard.partials.scripts.chat-core')
 @endsection

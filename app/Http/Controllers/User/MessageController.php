@@ -269,19 +269,32 @@ class MessageController extends Controller
 
             $beforeId = (int) $request->query('before_id');
             $limit = min(max((int) $request->query('limit', 25), 1), 50);
+            $targetId = (int) $request->query('target_id');
 
             if (!$beforeId) {
                 return response()->json(['messages' => [], 'has_more' => false]);
             }
 
-            $messages = $conversation->messages()
-                ->where('id', '<', $beforeId)
-                ->with(['user', 'replyTo.user', 'quiz.submissions', 'reactions'])
-                ->latest('id')
-                ->take($limit)
-                ->get()
-                ->reverse()
-                ->values();
+            if ($targetId > 0 && $targetId < $beforeId) {
+                $messages = $conversation->messages()
+                    ->where('id', '<', $beforeId)
+                    ->where('id', '>=', $targetId)
+                    ->with(['user', 'replyTo.user', 'quiz.submissions', 'reactions'])
+                    ->latest('id')
+                    ->take(60)
+                    ->get()
+                    ->reverse()
+                    ->values();
+            } else {
+                $messages = $conversation->messages()
+                    ->where('id', '<', $beforeId)
+                    ->with(['user', 'replyTo.user', 'quiz.submissions', 'reactions'])
+                    ->latest('id')
+                    ->take($limit)
+                    ->get()
+                    ->reverse()
+                    ->values();
+            }
 
             $oldestId = $messages->first()?->id;
             $hasMore = $oldestId ? $conversation->messages()->where('id', '<', $oldestId)->exists() : false;
@@ -293,6 +306,79 @@ class MessageController extends Controller
             ]);
         } catch (Exception $e) {
             Log::error("Loi khi tai them tin nhan cu: " . $e->getMessage());
+            return response()->json(['error' => 'Da xay ra loi may chu'], 500);
+        }
+    }
+
+    public function search(Request $request, Conversation $conversation)
+    {
+        try {
+            $userId = Auth::id();
+
+            if (!$conversation->participants()->where('user_id', $userId)->exists()) {
+                return response()->json(['error' => 'Forbidden'], 403);
+            }
+
+            $keyword = trim((string) $request->query('q', ''));
+            if ($keyword === '') {
+                return response()->json(['results' => []]);
+            }
+
+            $messages = $conversation->messages()
+                ->where('body', 'LIKE', '%' . $keyword . '%')
+                ->with('user')
+                ->latest('id')
+                ->take(30)
+                ->get();
+
+            $results = $messages->map(function ($msg) {
+                return [
+                    'id' => $msg->id,
+                    'user_name' => $msg->user ? $msg->user->name : 'Nguoi dung',
+                    'user_id' => $msg->user_id,
+                    'body' => $msg->body,
+                    'type' => $msg->type,
+                    'created_at' => $msg->created_at ? $msg->created_at->format('H:i d/m/Y') : '',
+                ];
+            });
+
+            return response()->json(['results' => $results]);
+        } catch (Exception $e) {
+            Log::error("Loi khi tim kiem tin nhan: " . $e->getMessage());
+            return response()->json(['error' => 'Da xay ra loi may chu'], 500);
+        }
+    }
+
+    public function togglePin(Request $request, Conversation $conversation, Message $message)
+    {
+        try {
+            $userId = Auth::id();
+
+            if (!$conversation->participants()->where('user_id', $userId)->exists()) {
+                return response()->json(['error' => 'Forbidden'], 403);
+            }
+
+            if ((int)$message->conversation_id !== (int)$conversation->id) {
+                return response()->json(['error' => 'Tin nhan khong thuoc cuoc tro chuyen nay'], 400);
+            }
+
+            $newPinStatus = !$message->is_pinned;
+
+            if ($newPinStatus) {
+                $conversation->messages()->where('is_pinned', true)->update(['is_pinned' => false]);
+            }
+
+            $message->update(['is_pinned' => $newPinStatus]);
+            $message->load(['user', 'replyTo.user', 'quiz.submissions', 'reactions']);
+
+            broadcast(new MessageUpdated($message))->toOthers();
+
+            return response()->json([
+                'is_pinned' => $message->is_pinned,
+                'message' => $message,
+            ]);
+        } catch (Exception $e) {
+            Log::error("Loi khi ghim tin nhan: " . $e->getMessage());
             return response()->json(['error' => 'Da xay ra loi may chu'], 500);
         }
     }

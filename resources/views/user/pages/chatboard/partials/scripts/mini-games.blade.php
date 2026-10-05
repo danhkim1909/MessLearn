@@ -198,7 +198,7 @@ function toggleReactionMenu(messageId) {
                     headers['X-Socket-ID'] = window.Echo.socketId();
                 }
 
-                const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation->id ?? 0 }}/reaction/${messageId}`, {
+                const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation?->id ?? 0 }}/reaction/${messageId}`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify({ reaction: reactionType })
@@ -274,7 +274,7 @@ function toggleReactionMenu(messageId) {
                     headers['X-Socket-ID'] = window.Echo.socketId();
                 }
 
-                const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation->id ?? 0 }}/game/dice`, {
+                const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation?->id ?? 0 }}/game/dice`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify({ body: note })
@@ -322,7 +322,7 @@ function toggleReactionMenu(messageId) {
                     headers['X-Socket-ID'] = window.Echo.socketId();
                 }
 
-                const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation->id ?? 0 }}/game/rps/create`, {
+                const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation?->id ?? 0 }}/game/rps/create`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify({ choice: choice, body: note })
@@ -358,7 +358,7 @@ function toggleReactionMenu(messageId) {
                     headers['X-Socket-ID'] = window.Echo.socketId();
                 }
 
-                const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation->id ?? 0 }}/game/rps/${messageId}/play`, {
+                const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation?->id ?? 0 }}/game/rps/${messageId}/play`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify({ choice: choice })

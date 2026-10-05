@@ -31,7 +31,9 @@ Route::prefix('app')->middleware(CheckLoginMiddleware::class)->name('app.')->gro
         Route::post('/group', [ConversationController::class, 'storeGroup'])->name('store-group');
         Route::post('/{conversation}/message', [\App\Http\Controllers\User\MessageController::class, 'store'])->name('message.store');
         Route::get('/{conversation}/messages/load-more', [\App\Http\Controllers\User\MessageController::class, 'loadMore'])->name('message.load-more');
+        Route::get('/{conversation}/messages/search', [\App\Http\Controllers\User\MessageController::class, 'search'])->name('message.search');
         Route::post('/{conversation}/reaction/{message}', [\App\Http\Controllers\User\MessageController::class, 'toggleReaction'])->name('message.reaction');
+        Route::post('/{conversation}/message/{message}/pin', [\App\Http\Controllers\User\MessageController::class, 'togglePin'])->name('message.pin');
         Route::post('/{conversation}/game/dice', [\App\Http\Controllers\User\MessageController::class, 'rollDice'])->name('game.dice');
         Route::post('/{conversation}/game/rps/create', [\App\Http\Controllers\User\MessageController::class, 'createRps'])->name('game.rps.create');
         Route::post('/{conversation}/game/rps/{message}/play', [\App\Http\Controllers\User\MessageController::class, 'playRps'])->name('game.rps.play');

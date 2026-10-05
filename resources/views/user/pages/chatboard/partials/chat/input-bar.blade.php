@@ -1,5 +1,15 @@
 <!-- Khung nhập Chat -->
 <div class="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0 flex flex-col">
+    <!-- Typing Indicator (Trang thai dang soan tin nhan) -->
+    <div id="typing-indicator" class="hidden mb-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs w-fit items-center gap-2 border border-slate-200/60 dark:border-slate-700/60 shadow-xs">
+        <div class="flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-sky-500 animate-bounce" style="animation-delay: 0ms;"></span>
+            <span class="w-1.5 h-1.5 rounded-full bg-sky-500 animate-bounce" style="animation-delay: 150ms;"></span>
+            <span class="w-1.5 h-1.5 rounded-full bg-sky-500 animate-bounce" style="animation-delay: 300ms;"></span>
+        </div>
+        <span id="typing-indicator-text" class="font-medium text-[11px]"></span>
+    </div>
+
     <!-- Preview Trả lời tin nhắn -->
     <div id="reply-preview-container" class="hidden mb-3 mx-12 p-3 bg-slate-50 dark:bg-slate-800/80 border-l-4 border-sky-500 rounded-xl flex items-center justify-between">
         <div class="text-xs min-w-0 flex-1">
@@ -37,7 +47,7 @@
             <i data-lucide="paperclip" class="w-5 h-5"></i>
         </button>
         <div class="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-1 relative">
-            <textarea id="chat-input" rows="1" class="w-full bg-transparent px-3 py-2 text-sm focus:outline-none dark:text-white resize-none max-h-32" placeholder="Nhập tin nhắn..." onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendChatMessage(event); }"></textarea>
+            <textarea id="chat-input" rows="1" oninput="handleChatInputTyping()" class="w-full bg-transparent px-3 py-2 text-sm focus:outline-none dark:text-white resize-none max-h-32" placeholder="Nhập tin nhắn..." onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendChatMessage(event); }"></textarea>
         </div>
         <button type="button" id="btn-record-voice" onclick="startVoiceRecording()" class="p-3 text-slate-400 hover:text-sky-500 transition-colors rounded-xl flex items-center justify-center shrink-0" title="Ghi âm">
             <i data-lucide="mic" class="w-5 h-5"></i>

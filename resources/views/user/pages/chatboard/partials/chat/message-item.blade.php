@@ -70,6 +70,15 @@
                     <button type="button" onclick="prepareReply({{ $message->id }}, '{{ addslashes($message->user->name) }}', '{{ addslashes(str_replace(["\r", "\n"], ' ', \Illuminate\Support\Str::limit($replyPreview, 50))) }}')" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm flex items-center justify-center transition-colors" title="Trả lời">
                         <i data-lucide="reply" class="w-3.5 h-3.5"></i>
                     </button>
+                    <button type="button" onclick="togglePinMessage({{ $message->id }})" id="btn-pin-{{ $message->id }}" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-500 shadow-sm flex items-center justify-center transition-colors" title="{{ $message->is_pinned ? 'Bỏ ghim' : 'Ghim tin nhắn' }}">
+                        <i data-lucide="pin" class="w-3.5 h-3.5 {{ $message->is_pinned ? 'text-amber-500 fill-amber-500' : '' }}"></i>
+                    </button>
+                </div>
+
+                <!-- Huy hieu Da ghim -->
+                <div id="pin-badge-{{ $message->id }}" class="{{ $message->is_pinned ? 'flex' : 'hidden' }} items-center gap-1 text-[10px] {{ $isMine ? 'text-amber-200' : 'text-amber-500 dark:text-amber-400' }} font-bold mb-1.5 pb-1 border-b {{ $isMine ? 'border-white/20' : 'border-slate-200/60 dark:border-slate-700/60' }}">
+                    <i data-lucide="pin" class="w-3 h-3 fill-current"></i>
+                    <span>Đã ghim</span>
                 </div>
 
                 @if($message->type === 'quiz')

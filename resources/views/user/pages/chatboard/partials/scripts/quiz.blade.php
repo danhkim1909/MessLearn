@@ -175,7 +175,7 @@ let questionCount = 0;
         };
 
         try {
-            const res = await fetch(`{{ route('app.conversation.quiz.store', $activeConversation->id ?? 0) }}`, {
+            const res = await fetch(`{{ route('app.conversation.quiz.store', $activeConversation?->id ?? 0) }}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -209,7 +209,7 @@ let questionCount = 0;
         openModal('modal-quiz-leaderboard');
 
         try {
-            const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation->id ?? 0 }}/quiz/${formId}/results`);
+            const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation?->id ?? 0 }}/quiz/${formId}/results`);
             if (!res.ok) {
                 Toastify({ text: "Không thể tải điểm số", style: { background: "#f43f5e" } }).showToast();
                 closeModal('modal-quiz-leaderboard');
@@ -299,7 +299,7 @@ let questionCount = 0;
         openModal('modal-take-quiz');
         
         try {
-            const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation->id ?? 0 }}/quiz/${formId}`);
+            const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation?->id ?? 0 }}/quiz/${formId}`);
             if (!res.ok) {
                 Toastify({ text: "Không thể tải đề bài", style: { background: "#f43f5e" } }).showToast();
                 return;
@@ -382,7 +382,7 @@ let questionCount = 0;
         btn.disabled = true;
         
         try {
-            const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation->id ?? 0 }}/quiz/${currentActiveFormId}/submit`, {
+            const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation?->id ?? 0 }}/quiz/${currentActiveFormId}/submit`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

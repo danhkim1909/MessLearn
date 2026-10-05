@@ -1,5 +1,5 @@
 <!-- Nội dung Chat -->
-<div class="flex-1 overflow-y-auto p-6 space-y-4" id="chat-messages-container" onscroll="handleChatScroll()" data-has-more="{{ ($hasMoreMessages ?? false) ? '1' : '0' }}" data-oldest-id="{{ $oldestMessageId ?? ($activeConversation->messages->first()?->id ?? 0) }}">
+<div class="flex-1 overflow-y-auto p-6 space-y-4" id="chat-messages-container" onscroll="handleChatScroll()" data-has-more="{{ ($hasMoreMessages ?? false) ? '1' : '0' }}" data-oldest-id="{{ $oldestMessageId ?? ($activeConversation?->messages->first()?->id ?? 0) }}">
     <!-- Spinner báo đang tải tin nhắn cũ -->
     <div id="loading-old-messages" class="hidden py-2 text-center text-xs text-slate-400">
         <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">

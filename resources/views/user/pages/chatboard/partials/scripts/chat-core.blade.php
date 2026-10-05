@@ -291,6 +291,14 @@ async function createGroup() {
                                 <button type="button" onclick="prepareReply(${message.id}, '${(message.user ? message.user.name : '').replace(/'/g, '\\\'')}', '${replyTooltip.replace(/'/g, '\\\'').replace(/\r\n|\n|\r/g, ' ').substring(0, 50)}')" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm flex items-center justify-center transition-colors" title="Trả lời">
                                     <i data-lucide="reply" class="w-3.5 h-3.5"></i>
                                 </button>
+                                <button type="button" onclick="togglePinMessage(${message.id})" id="btn-pin-${message.id}" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-500 shadow-sm flex items-center justify-center transition-colors" title="${message.is_pinned ? 'Bỏ ghim' : 'Ghim tin nhắn'}">
+                                    <i data-lucide="pin" class="w-3.5 h-3.5 ${message.is_pinned ? 'text-amber-500 fill-amber-500' : ''}"></i>
+                                </button>
+                            </div>
+                            <!-- Huy hieu Da ghim -->
+                            <div id="pin-badge-${message.id}" class="${message.is_pinned ? 'flex' : 'hidden'} items-center gap-1 text-[10px] ${isMine ? 'text-amber-200' : 'text-amber-500 dark:text-amber-400'} font-bold mb-1.5 pb-1 border-b ${isMine ? 'border-white/20' : 'border-slate-200/60 dark:border-slate-700/60'}">
+                                <i data-lucide="pin" class="w-3 h-3 fill-current"></i>
+                                <span>Đã ghim</span>
                             </div>
                             ${innerContent}
                             <div id="reactions-bar-${message.id}" class="flex flex-wrap gap-1 mt-1.5 ${isMine ? 'justify-end' : 'justify-start'} hidden"></div>
@@ -354,7 +362,7 @@ async function createGroup() {
         loadingEl.classList.remove('hidden');
 
         try {
-            const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation->id ?? 0 }}/messages/load-more?before_id=${beforeId}&limit=25`);
+            const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation?->id ?? 0 }}/messages/load-more?before_id=${beforeId}&limit=25`);
             if (res.ok) {
                 const data = await res.json();
                 const msgs = data.messages || [];
@@ -468,6 +476,7 @@ async function createGroup() {
 
         input.value = '';
         cancelReply();
+        hideTypingIndicator();
 
         try {
             const headers = {
@@ -483,7 +492,7 @@ async function createGroup() {
                 payload.reply_to_id = replyToId;
             }
 
-            const res = await fetch('{{ route('app.conversation.message.store', $activeConversation->id) }}', {
+            const res = await fetch('{{ route('app.conversation.message.store', $activeConversation?->id ?? 0) }}', {
                 method: 'POST',
                 headers: headers,
                 body: JSON.stringify(payload)
@@ -560,6 +569,409 @@ async function createGroup() {
         }
     }
 
+    // Xu ly Trang thai dang soan tin nhan (Typing Indicator)
+    let lastWhisperTime = 0;
+    let typingDisplayTimeout = null;
+
+    function handleChatInputTyping() {
+        const input = document.getElementById('chat-input');
+        if (!input) return;
+
+        if (input.value.trim().length === 0) {
+            return;
+        }
+
+        if (typeof window.Echo !== 'undefined') {
+            const now = Date.now();
+            if (now - lastWhisperTime > 1500) {
+                lastWhisperTime = now;
+                window.Echo.private('conversation.{{ $activeConversation?->id ?? 0 }}')
+                    .whisper('typing', {
+                        user_id: {{ Auth::id() }},
+                        user_name: '{{ addslashes(Auth::user()->name) }}'
+                    });
+            }
+        }
+    }
+
+    function showTypingIndicator(userName) {
+        const indicator = document.getElementById('typing-indicator');
+        const textEl = document.getElementById('typing-indicator-text');
+        const headerStatus = document.getElementById('chat-header-status');
+        if (!indicator || !textEl) return;
+
+        textEl.innerText = `${userName} đang soạn tin nhắn...`;
+        indicator.classList.remove('hidden');
+        indicator.classList.add('flex');
+
+        if (headerStatus) {
+            headerStatus.innerText = 'Đang soạn tin nhắn...';
+            headerStatus.className = 'text-xs text-sky-500 font-medium animate-pulse';
+        }
+
+        if (isNearBottom(150)) {
+            smartScrollToBottom(true, false);
+        }
+
+        if (typingDisplayTimeout) {
+            clearTimeout(typingDisplayTimeout);
+        }
+
+        typingDisplayTimeout = setTimeout(() => {
+            hideTypingIndicator();
+        }, 3000);
+    }
+
+    function hideTypingIndicator() {
+        const indicator = document.getElementById('typing-indicator');
+        const headerStatus = document.getElementById('chat-header-status');
+        if (indicator) {
+            indicator.classList.add('hidden');
+            indicator.classList.remove('flex');
+        }
+        if (headerStatus) {
+            headerStatus.innerText = 'Đang hoạt động';
+            headerStatus.className = 'text-xs text-emerald-500 font-medium';
+        }
+    }
+
+    // Xu ly Tim kiem tin nhan (Search in Chat)
+    let searchDebounceTimer = null;
+
+    function toggleChatSearch() {
+        const panel = document.getElementById('chat-search-panel');
+        if (!panel) return;
+        const isHidden = panel.classList.contains('hidden');
+        if (isHidden) {
+            panel.classList.remove('hidden');
+            const input = document.getElementById('chat-search-input');
+            if (input) {
+                input.focus();
+            }
+        } else {
+            closeChatSearch();
+        }
+    }
+
+    function closeChatSearch() {
+        const panel = document.getElementById('chat-search-panel');
+        if (panel) {
+            panel.classList.add('hidden');
+        }
+        clearChatSearchInput();
+    }
+
+    function clearChatSearchInput() {
+        const input = document.getElementById('chat-search-input');
+        const clearBtn = document.getElementById('btn-clear-search');
+        const resultsContainer = document.getElementById('chat-search-results-container');
+        const statusEl = document.getElementById('chat-search-status');
+
+        if (input) input.value = '';
+        if (clearBtn) clearBtn.classList.add('hidden');
+        if (resultsContainer) {
+            resultsContainer.innerHTML = '';
+            resultsContainer.classList.add('hidden');
+        }
+        if (statusEl) {
+            statusEl.innerText = '';
+            statusEl.classList.add('hidden');
+        }
+    }
+
+    function escapeHtmlText(str) {
+        if (!str) return '';
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function highlightKeyword(text, keyword) {
+        if (!text) return '';
+        if (!keyword) return escapeHtmlText(text);
+
+        const escapedText = escapeHtmlText(text);
+        const escapedKeyword = escapeHtmlText(keyword);
+        const regex = new RegExp(`(${escapedKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        return escapedText.replace(regex, '<mark class="bg-amber-200 dark:bg-amber-800 text-slate-900 dark:text-white rounded px-0.5">$1</mark>');
+    }
+
+    function handleChatSearchInput(keyword) {
+        const clearBtn = document.getElementById('btn-clear-search');
+        const resultsContainer = document.getElementById('chat-search-results-container');
+        const statusEl = document.getElementById('chat-search-status');
+
+        const trimmed = (keyword || '').trim();
+        if (clearBtn) {
+            if (trimmed.length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+        }
+
+        if (searchDebounceTimer) {
+            clearTimeout(searchDebounceTimer);
+        }
+
+        if (trimmed.length === 0) {
+            if (resultsContainer) {
+                resultsContainer.innerHTML = '';
+                resultsContainer.classList.add('hidden');
+            }
+            if (statusEl) {
+                statusEl.innerText = '';
+                statusEl.classList.add('hidden');
+            }
+            return;
+        }
+
+        if (statusEl) {
+            statusEl.innerText = 'Đang tìm kiếm...';
+            statusEl.classList.remove('hidden');
+        }
+
+        searchDebounceTimer = setTimeout(async () => {
+            try {
+                const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation?->id ?? 0 }}/messages/search?q=${encodeURIComponent(trimmed)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const list = data.results || [];
+                    renderChatSearchResults(list, trimmed);
+                } else {
+                    if (statusEl) statusEl.innerText = 'Lỗi máy chủ khi tìm kiếm';
+                }
+            } catch (err) {
+                if (statusEl) statusEl.innerText = 'Lỗi kết nối khi tìm kiếm';
+            }
+        }, 300);
+    }
+
+    function renderChatSearchResults(results, keyword) {
+        const resultsContainer = document.getElementById('chat-search-results-container');
+        const statusEl = document.getElementById('chat-search-status');
+        if (!resultsContainer || !statusEl) return;
+
+        resultsContainer.innerHTML = '';
+
+        if (results.length === 0) {
+            resultsContainer.classList.add('hidden');
+            statusEl.innerText = 'Không tìm thấy tin nhắn nào phù hợp.';
+            statusEl.classList.remove('hidden');
+            return;
+        }
+
+        statusEl.innerText = `Tìm thấy ${results.length} tin nhắn:`;
+        statusEl.classList.remove('hidden');
+
+        results.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'p-2 hover:bg-slate-100 dark:hover:bg-slate-800/80 rounded-xl cursor-pointer transition-colors';
+            row.onclick = () => jumpToSearchedMessage(item.id);
+
+            const highlightedSnippet = highlightKeyword(item.body || '', keyword);
+
+            row.innerHTML = `
+                <div class="flex items-center justify-between text-[11px] mb-0.5">
+                    <span class="font-bold text-slate-700 dark:text-slate-200">${escapeHtmlText(item.user_name)}</span>
+                    <span class="text-slate-400 text-[10px]">${escapeHtmlText(item.created_at)}</span>
+                </div>
+                <div class="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
+                    ${highlightedSnippet}
+                </div>
+            `;
+            resultsContainer.appendChild(row);
+        });
+
+        resultsContainer.classList.remove('hidden');
+    }
+
+    async function jumpToSearchedMessage(targetId) {
+        closeChatSearch();
+
+        let el = document.getElementById('msg-' + targetId);
+        if (!el && hasMoreOlderMessages) {
+            Toastify({
+                text: "Đang tải tin nhắn cũ để di chuyển tới vị trí...",
+                duration: 2500,
+                style: { background: "#0284c7" }
+            }).showToast();
+
+            const container = document.getElementById('chat-messages-container');
+            const loadingEl = document.getElementById('loading-old-messages');
+            if (container && loadingEl) {
+                const firstMsgEl = container.querySelector('[id^="msg-"]');
+                const beforeId = firstMsgEl ? parseInt(firstMsgEl.id.replace('msg-', '')) : oldestMessageId;
+
+                if (beforeId && beforeId > 0) {
+                    loadingEl.classList.remove('hidden');
+                    try {
+                        const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation?->id ?? 0 }}/messages/load-more?before_id=${beforeId}&target_id=${targetId}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            const msgs = data.messages || [];
+                            if (msgs.length > 0) {
+                                const oldScrollHeight = container.scrollHeight;
+                                const oldScrollTop = container.scrollTop;
+
+                                let oldHtml = '';
+                                msgs.forEach(msg => {
+                                    if (!document.getElementById('msg-' + msg.id)) {
+                                        oldHtml += buildMessageHtml(msg);
+                                    }
+                                });
+
+                                loadingEl.insertAdjacentHTML('afterend', oldHtml);
+                                msgs.forEach(msg => {
+                                    if (msg.reactions && msg.reactions.length > 0) {
+                                        updateReactionsBar(msg.id, msg.reactions);
+                                    }
+                                });
+                                lucide.createIcons();
+
+                                container.scrollTop = oldScrollTop + (container.scrollHeight - oldScrollHeight);
+                                hasMoreOlderMessages = !!data.has_more;
+                                oldestMessageId = data.oldest_id || (msgs[0] ? msgs[0].id : 0);
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Loi khi tai tin nhan tim kiem:', err);
+                    } finally {
+                        loadingEl.classList.add('hidden');
+                    }
+                }
+            }
+        }
+
+        scrollToMessage(targetId);
+    }
+
+    // Xu ly Ghim / Bo ghim tin nhan (Pin Messages)
+    async function togglePinMessage(messageId) {
+        try {
+            const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation?->id ?? 0 }}/message/${messageId}/pin`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                }
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                handleMessagePinnedUpdated(data.message);
+                Toastify({
+                    text: data.is_pinned ? "Đã ghim tin nhắn" : "Đã bỏ ghim tin nhắn",
+                    duration: 2000,
+                    style: { background: data.is_pinned ? "#0284c7" : "#64748b" }
+                }).showToast();
+            } else {
+                Toastify({ text: "Lỗi ghim tin nhắn", style: { background: "#f43f5e" } }).showToast();
+            }
+        } catch (err) {
+            Toastify({ text: "Lỗi kết nối", style: { background: "#f43f5e" } }).showToast();
+        }
+    }
+
+    function unpinCurrentMessage(e) {
+        if (e) e.stopPropagation();
+        const bar = document.getElementById('pinned-message-bar');
+        if (!bar) return;
+        const pinnedId = parseInt(bar.getAttribute('data-pinned-id'));
+        if (pinnedId > 0) {
+            togglePinMessage(pinnedId);
+        }
+    }
+
+    function jumpToPinnedMessage() {
+        const bar = document.getElementById('pinned-message-bar');
+        if (!bar) return;
+        const pinnedId = parseInt(bar.getAttribute('data-pinned-id'));
+        if (pinnedId > 0) {
+            jumpToSearchedMessage(pinnedId);
+        }
+    }
+
+    function handleMessagePinnedUpdated(message) {
+        if (!message) return;
+
+        // 1. Cap nhat huy hieu va nut pin tren the tin nhan (neu da co trong DOM)
+        const badge = document.getElementById(`pin-badge-${message.id}`);
+        const btn = document.getElementById(`btn-pin-${message.id}`);
+
+        if (badge) {
+            if (message.is_pinned) {
+                badge.classList.remove('hidden');
+                badge.classList.add('flex');
+            } else {
+                badge.classList.add('hidden');
+                badge.classList.remove('flex');
+            }
+        }
+
+        if (btn) {
+            btn.title = message.is_pinned ? 'Bỏ ghim' : 'Ghim tin nhắn';
+            const icon = btn.querySelector('svg') || btn.querySelector('i');
+            if (icon) {
+                if (message.is_pinned) {
+                    icon.classList.add('text-amber-500', 'fill-amber-500');
+                } else {
+                    icon.classList.remove('text-amber-500', 'fill-amber-500');
+                }
+            }
+        }
+
+        // 2. Cap nhat thanh ghim duoi Header
+        const bar = document.getElementById('pinned-message-bar');
+        const senderNameEl = document.getElementById('pinned-sender-name');
+        const previewEl = document.getElementById('pinned-message-preview');
+
+        if (!bar || !senderNameEl || !previewEl) return;
+
+        if (message.is_pinned) {
+            // Bo ghim cac tin khac trong DOM
+            document.querySelectorAll('[id^="pin-badge-"]').forEach(el => {
+                if (el.id !== `pin-badge-${message.id}`) {
+                    el.classList.add('hidden');
+                    el.classList.remove('flex');
+                }
+            });
+            document.querySelectorAll('[id^="btn-pin-"]').forEach(el => {
+                if (el.id !== `btn-pin-${message.id}`) {
+                    el.title = 'Ghim tin nhắn';
+                    const icon = el.querySelector('svg') || el.querySelector('i');
+                    if (icon) icon.classList.remove('text-amber-500', 'fill-amber-500');
+                }
+            });
+
+            bar.setAttribute('data-pinned-id', message.id);
+            senderNameEl.innerText = (message.user ? message.user.name : '');
+
+            let previewText = message.body || '';
+            if (message.type === 'image') previewText = '[Hình ảnh]' + (message.body ? ': ' + message.body : '');
+            else if (message.type === 'audio') previewText = '[Tin nhắn thoại]';
+            else if (message.type === 'quiz') previewText = '[Bài kiểm tra]: ' + (message.body || '');
+            else if (message.type === 'game_dice') previewText = '[Tung xúc xắc]';
+            else if (message.type === 'game_rps') previewText = '[Oẳn tù tì]';
+
+            previewEl.innerText = previewText;
+            bar.classList.remove('hidden');
+            bar.classList.add('flex');
+        } else {
+            const currentPinnedId = parseInt(bar.getAttribute('data-pinned-id'));
+            if (currentPinnedId === message.id) {
+                bar.setAttribute('data-pinned-id', '0');
+                bar.classList.add('hidden');
+                bar.classList.remove('flex');
+            }
+        }
+
+        lucide.createIcons();
+    }
+
     // Event Listeners (Echo Realtime & Click Outside)
     document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('chat-messages-container');
@@ -571,12 +983,19 @@ async function createGroup() {
         smartScrollToBottom(true, false);
 
         if (typeof window.Echo !== 'undefined') {
-            window.Echo.private('conversation.{{ $activeConversation->id }}')
+            window.Echo.private('conversation.{{ $activeConversation?->id ?? 0 }}')
                 .listen('.MessageSent', (e) => {
+                    hideTypingIndicator();
                     appendMessageToChat(e.message);
                 })
                 .listen('.MessageUpdated', (e) => {
                     updateMessageInChat(e.message);
+                    handleMessagePinnedUpdated(e.message);
+                })
+                .listenForWhisper('typing', (e) => {
+                    if (e.user_id !== {{ Auth::id() }}) {
+                        showTypingIndicator(e.user_name);
+                    }
                 });
         }
 
@@ -586,6 +1005,12 @@ async function createGroup() {
                     el.classList.add('hidden');
                     el.classList.remove('flex');
                 });
+            }
+            if (!e.target.closest('#chat-search-panel') && !e.target.closest('button[onclick*="toggleChatSearch"]')) {
+                const searchPanel = document.getElementById('chat-search-panel');
+                if (searchPanel && !searchPanel.classList.contains('hidden')) {
+                    closeChatSearch();
+                }
             }
         });
     });

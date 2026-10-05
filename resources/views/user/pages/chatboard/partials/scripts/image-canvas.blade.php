@@ -107,7 +107,7 @@ let selectedImageFile = null;
             cancelImageSelection();
             cancelReply();
 
-            const res = await fetch('{{ route('app.conversation.message.store', $activeConversation->id ?? 0) }}', {
+            const res = await fetch('{{ route('app.conversation.message.store', $activeConversation?->id ?? 0) }}', {
                 method: 'POST',
                 headers: headers,
                 body: formData

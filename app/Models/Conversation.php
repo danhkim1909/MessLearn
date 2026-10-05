@@ -28,6 +28,11 @@ class Conversation extends Model
         return $this->hasMany(Message::class);
     }
 
+    public function pinnedMessages(): HasMany
+    {
+        return $this->hasMany(Message::class)->where('is_pinned', true);
+    }
+
     public function users(): HasManyThrough
     {
         return $this->hasManyThrough(

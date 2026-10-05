@@ -68,11 +68,14 @@ class ChatBoardController extends Controller
         $hasMoreMessages = $oldestMessageId
             ? $conversation->messages()->where('id', '<', $oldestMessageId)->exists()
             : false;
+
+        $pinnedMessage = $conversation->pinnedMessages()->with('user')->latest('updated_at')->first();
         
         $data = $this->getSidebarData();
         $data['activeConversation'] = $conversation;
         $data['hasMoreMessages'] = $hasMoreMessages;
         $data['oldestMessageId'] = $oldestMessageId;
+        $data['pinnedMessage'] = $pinnedMessage;
 
         return view('user.pages.chatboard.index', $data);
     }

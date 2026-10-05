@@ -333,7 +333,7 @@ function toggleAudioPlay(btn) {
                 cancelReply();
                 cancelVoiceRecording();
 
-                const res = await fetch('{{ route('app.conversation.message.store', $activeConversation->id) }}', {
+                const res = await fetch('{{ route('app.conversation.message.store', $activeConversation?->id ?? 0) }}', {
                     method: 'POST',
                     headers: headers,
                     body: formData
