@@ -123,7 +123,7 @@
     </section>
 
     <!-- CỘT 3: CỬA SỔ CHAT CHÍNH -->
-    <main class="flex-1 bg-white dark:bg-slate-900 flex flex-col min-w-0 border-r border-slate-200 dark:border-slate-800">
+    <main class="flex-1 bg-white dark:bg-slate-900 flex flex-col min-w-0 border-r border-slate-200 dark:border-slate-800 relative">
         @if(isset($activeConversation))
             <!-- Header Chat -->
             <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shrink-0">
@@ -154,7 +154,7 @@
             </div>
 
             <!-- Nội dung Chat -->
-            <div class="flex-1 overflow-y-auto p-6 space-y-4" id="chat-messages-container">
+            <div class="flex-1 overflow-y-auto p-6 space-y-4" id="chat-messages-container" onscroll="handleChatScroll()">
                 @if($activeConversation->messages->isEmpty())
                     <div class="h-full flex items-center justify-center text-sm text-slate-400">
                         Chưa có tin nhắn nào. Bắt đầu trò chuyện!
@@ -279,6 +279,12 @@
                     @endforeach
                 @endif
             </div>
+
+            <!-- Nút cuộn xuống đáy & Thông báo tin mới -->
+            <button type="button" id="btn-scroll-bottom" onclick="smartScrollToBottom(true, true)" class="hidden absolute right-6 bottom-24 p-2.5 rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 shadow-lg border border-slate-200 dark:border-slate-700 hover:text-sky-500 hover:scale-105 active:scale-95 transition-all z-20 items-center gap-1.5 text-xs font-semibold" title="Cuộn xuống đáy">
+                <i data-lucide="arrow-down" class="w-4 h-4 text-sky-500"></i>
+                <span id="scroll-bottom-badge" class="hidden w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+            </button>
 
             <!-- Khung nhập Chat -->
             <div class="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0 flex flex-col">
@@ -1218,7 +1224,7 @@
             `;
 
             chatContainer.insertAdjacentHTML('beforeend', messageHtml);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            smartScrollToBottom(isMine, true);
             lucide.createIcons();
         }
 
@@ -1368,13 +1374,19 @@
             const el = document.getElementById('msg-' + id);
             if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                const bubble = el.querySelector('.max-w-md');
+                const bubble = el.querySelector('.max-w-md') || el.querySelector('.max-w-xs');
                 if (bubble) {
                     bubble.classList.add('ring-4', 'ring-amber-300', 'dark:ring-amber-500', 'transition-all');
                     setTimeout(() => {
                         bubble.classList.remove('ring-4', 'ring-amber-300', 'dark:ring-amber-500');
                     }, 1500);
                 }
+            } else {
+                Toastify({
+                    text: "Tin nhắn gốc chưa được tải hoặc ở quá xa trong lịch sử trò chuyện",
+                    duration: 3000,
+                    style: { background: "#475569" }
+                }).showToast();
             }
         }
 
@@ -1449,12 +1461,60 @@
             }
         }
 
-        const chatContainer = document.getElementById('chat-messages-container');
-        if(chatContainer) {
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+        function isNearBottom(threshold = 120) {
+            const container = document.getElementById('chat-messages-container');
+            if (!container) return true;
+            return (container.scrollHeight - container.scrollTop - container.clientHeight) <= threshold;
+        }
+
+        function smartScrollToBottom(force = false, smooth = true) {
+            const container = document.getElementById('chat-messages-container');
+            if (!container) return;
+
+            if (force || isNearBottom()) {
+                container.scrollTo({
+                    top: container.scrollHeight,
+                    behavior: smooth ? 'smooth' : 'auto'
+                });
+                hideScrollBottomButton();
+            } else {
+                showScrollBottomButton(true);
+            }
+        }
+
+        function handleChatScroll() {
+            if (isNearBottom(150)) {
+                hideScrollBottomButton();
+            } else {
+                showScrollBottomButton(false);
+            }
+        }
+
+        function showScrollBottomButton(hasNewMessage = false) {
+            const btn = document.getElementById('btn-scroll-bottom');
+            const badge = document.getElementById('scroll-bottom-badge');
+            if (!btn) return;
+            btn.classList.remove('hidden');
+            btn.classList.add('flex');
+            if (badge && hasNewMessage) {
+                badge.classList.remove('hidden');
+            }
+        }
+
+        function hideScrollBottomButton() {
+            const btn = document.getElementById('btn-scroll-bottom');
+            const badge = document.getElementById('scroll-bottom-badge');
+            if (!btn) return;
+            btn.classList.add('hidden');
+            btn.classList.remove('flex');
+            if (badge) {
+                badge.classList.add('hidden');
+            }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            smartScrollToBottom(true, false);
+
             if (typeof window.Echo !== 'undefined') {
                 window.Echo.private('conversation.{{ $activeConversation->id }}')
                     .listen('.MessageSent', (e) => {
