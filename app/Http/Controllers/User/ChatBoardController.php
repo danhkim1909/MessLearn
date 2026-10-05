@@ -70,12 +70,34 @@ class ChatBoardController extends Controller
             : false;
 
         $pinnedMessage = $conversation->pinnedMessages()->with('user')->latest('updated_at')->first();
+
+        $now = now();
+        $upcomingEvent = $conversation->messages()
+            ->where('type', 'event')
+            ->latest('id')
+            ->take(50)
+            ->get()
+            ->filter(function ($msg) use ($now) {
+                $remindAt = $msg->metadata['remind_at'] ?? null;
+                if (!$remindAt) return false;
+                try {
+                    $dt = \Carbon\Carbon::parse($remindAt);
+                    return $dt->greaterThanOrEqualTo($now->copy()->subHours(2));
+                } catch (\Exception $e) {
+                    return false;
+                }
+            })
+            ->sortBy(function ($msg) {
+                return $msg->metadata['remind_at'] ?? '';
+            })
+            ->first();
         
         $data = $this->getSidebarData();
         $data['activeConversation'] = $conversation;
         $data['hasMoreMessages'] = $hasMoreMessages;
         $data['oldestMessageId'] = $oldestMessageId;
         $data['pinnedMessage'] = $pinnedMessage;
+        $data['upcomingEvent'] = $upcomingEvent;
 
         return view('user.pages.chatboard.index', $data);
     }

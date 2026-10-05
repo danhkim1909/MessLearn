@@ -77,6 +77,8 @@
                             [Tung xúc xắc]
                         @elseif($pinnedMessage->type === 'game_rps')
                             [Oẳn tù tì]
+                        @elseif($pinnedMessage->type === 'event')
+                            [Lịch hẹn]: {{ $pinnedMessage->body }}
                         @else
                             {{ $pinnedMessage->body }}
                         @endif
@@ -87,5 +89,41 @@
         <button type="button" onclick="unpinCurrentMessage(event)" class="p-1 text-slate-400 hover:text-rose-500 rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition-colors shrink-0 ml-2" title="Bỏ ghim">
             <i data-lucide="x" class="w-3.5 h-3.5"></i>
         </button>
+    </div>
+
+    <!-- Thanh Banner Nhac hen sap toi (Upcoming Reminder Banner Zalo-style) -->
+    <div id="upcoming-reminder-banner" class="{{ ($upcomingEvent ?? false) ? 'flex' : 'hidden' }} items-center justify-between px-6 py-2.5 bg-amber-500/10 dark:bg-amber-950/30 border-t border-amber-200/60 dark:border-amber-800/40 text-xs transition-all z-20" data-event-id="{{ $upcomingEvent?->id ?? 0 }}" data-remind-at="{{ $upcomingEvent?->metadata['remind_at'] ?? '' }}" data-remind-before="{{ $upcomingEvent?->metadata['remind_before'] ?? 15 }}" data-location="{{ $upcomingEvent?->metadata['location'] ?? '' }}">
+        <div class="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer hover:opacity-90 transition-opacity" onclick="jumpToReminderEvent()">
+            <div class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <i data-lucide="bell-ring" class="w-4 h-4 animate-bounce"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-200 text-xs">
+                    <span>Sắp đến lịch hẹn:</span>
+                    <span id="reminder-banner-title" class="truncate font-semibold">{{ $upcomingEvent?->metadata['title'] ?? ($upcomingEvent?->body ?? '') }}</span>
+                </div>
+                <div class="flex items-center gap-2 text-[11px] text-amber-700/80 dark:text-amber-300/80 mt-0.5">
+                    <span id="reminder-banner-time" class="font-semibold"></span>
+                    <span>•</span>
+                    <span id="reminder-banner-countdown" class="font-bold text-amber-600 dark:text-amber-400">Đang tính thời gian...</span>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0 ml-3">
+            @php
+                $eventLoc = $upcomingEvent?->metadata['location'] ?? '';
+                $isOnlineLink = str_starts_with($eventLoc, 'http://') || str_starts_with($eventLoc, 'https://');
+            @endphp
+            <a id="btn-reminder-join-link" href="{{ $isOnlineLink ? $eventLoc : '#' }}" target="_blank" rel="noopener noreferrer" class="{{ $isOnlineLink ? 'flex' : 'hidden' }} items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-xs transition-all" onclick="event.stopPropagation()">
+                <i data-lucide="video" class="w-3.5 h-3.5"></i>
+                <span>Vào phòng học</span>
+            </a>
+            <button type="button" onclick="jumpToReminderEvent()" class="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-800 dark:text-amber-200 font-semibold text-xs transition-colors">
+                Xem tin
+            </button>
+            <button type="button" onclick="dismissReminderBanner(event)" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md transition-colors" title="Ẩn nhắc nhở này">
+                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+        </div>
     </div>
 </div>

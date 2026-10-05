@@ -388,6 +388,12 @@ function toggleReactionMenu(messageId) {
                     const isMine = message.user_id === {{ Auth::id() }};
                     rpsEl.outerHTML = renderRpsCardHtml(message, isMine);
                 }
+            } else if (message.type === 'event') {
+                const eventEl = document.getElementById('event-card-' + message.id);
+                if (eventEl && typeof renderEventCardHtml === 'function') {
+                    const isMine = message.user_id === {{ Auth::id() }};
+                    eventEl.outerHTML = renderEventCardHtml(message, isMine);
+                }
             }
 
             if (message.reactions) {

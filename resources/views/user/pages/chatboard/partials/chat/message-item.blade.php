@@ -30,6 +30,8 @@
                                 [Tin nhắn thoại]
                             @elseif($message->replyTo->type === 'image')
                                 [Hình ảnh] {{ $message->replyTo->body ? ': ' . $message->replyTo->body : '' }}
+                            @elseif($message->replyTo->type === 'event')
+                                [Lịch hẹn]: {{ $message->replyTo->body }}
                             @else
                                 {{ $message->replyTo->body }}
                             @endif
@@ -39,7 +41,7 @@
                 
                 <!-- Action Toolbar: Thả cảm xúc & Reply -->
                 @php
-                    $replyPreview = $message->type === 'quiz' ? 'Bài kiểm tra: ' . $message->body : ($message->type === 'audio' ? '[Tin nhắn thoại]' : ($message->type === 'image' ? '[Hình ảnh]' : ($message->type === 'game_dice' ? '[Tung xúc xắc]' : ($message->type === 'game_rps' ? '[Oẳn tù tì]' : $message->body))));
+                    $replyPreview = $message->type === 'quiz' ? 'Bài kiểm tra: ' . $message->body : ($message->type === 'audio' ? '[Tin nhắn thoại]' : ($message->type === 'image' ? '[Hình ảnh]' : ($message->type === 'game_dice' ? '[Tung xúc xắc]' : ($message->type === 'game_rps' ? '[Oẳn tù tì]' : ($message->type === 'event' ? '[Lịch hẹn]: ' . $message->body : $message->body)))));
                 @endphp
                 <div class="absolute {{ $isMine ? 'right-full mr-2' : 'left-full ml-2' }} top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
                     <div class="relative reaction-picker-wrap">
@@ -265,6 +267,81 @@
                                 </div>
                             </div>
                         @endif
+                    </div>
+                @elseif($message->type === 'event')
+                    @php
+                        $meta = $message->metadata ?? [];
+                        $eventTitle = $meta['title'] ?? $message->body ?? 'Lịch hẹn học tập';
+                        $remindAt = isset($meta['remind_at']) ? \Carbon\Carbon::parse($meta['remind_at']) : null;
+                        $location = $meta['location'] ?? '';
+                        $note = $meta['note'] ?? '';
+                        $participants = $meta['participants'] ?? [];
+                        $participantCount = count($participants);
+                        $hasJoined = isset($participants[Auth::id()]);
+                        $isPast = $remindAt ? $remindAt->isPast() : false;
+                    @endphp
+                    <div id="event-card-{{ $message->id }}" class="flex flex-col gap-2.5 py-1 min-w-[260px] sm:min-w-[300px]">
+                        <!-- Header Su kien -->
+                        <div class="flex items-center justify-between border-b {{ $isMine ? 'border-white/20' : 'border-slate-200 dark:border-slate-700' }} pb-2">
+                            <div class="flex items-center gap-1.5 font-bold text-xs {{ $isMine ? 'text-white' : 'text-emerald-600 dark:text-emerald-400' }}">
+                                <i data-lucide="calendar" class="w-4 h-4"></i>
+                                <span>LỊCH HẸN HỌC TẬP</span>
+                            </div>
+                            <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full {{ $isPast ? 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' }}">
+                                {{ $isPast ? 'Đã diễn ra' : 'Sắp tới' }}
+                            </span>
+                        </div>
+
+                        <!-- Khoi Thoi gian va Tieu de -->
+                        <div class="flex items-start gap-3">
+                            @if($remindAt)
+                                <div class="w-13 text-center shrink-0 rounded-xl overflow-hidden border {{ $isMine ? 'border-white/20 bg-white/10' : 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40' }} shadow-xs">
+                                    <div class="bg-emerald-500 text-white text-[9px] uppercase font-bold py-0.5">
+                                        Thg {{ $remindAt->format('m') }}
+                                    </div>
+                                    <div class="py-1">
+                                        <div class="font-black text-lg leading-none {{ $isMine ? 'text-white' : 'text-slate-800 dark:text-slate-100' }}">
+                                            {{ $remindAt->format('d') }}
+                                        </div>
+                                        <div class="text-[9px] font-semibold opacity-75 mt-0.5">
+                                            {{ $remindAt->format('H:i') }}
+                                        </div>
+                                    </div>
+                                </div>
+                            @endif
+                            <div class="flex-1 min-w-0">
+                                <h4 class="font-extrabold text-sm leading-tight {{ $isMine ? 'text-white' : 'text-slate-900 dark:text-white' }} mb-1">
+                                    {{ $eventTitle }}
+                                </h4>
+                                @if($location)
+                                    <div class="flex items-center gap-1 text-[11px] opacity-90 truncate mb-1">
+                                        <i data-lucide="{{ str_starts_with($location, 'http') ? 'video' : 'map-pin' }}" class="w-3.5 h-3.5 shrink-0"></i>
+                                        @if(str_starts_with($location, 'http'))
+                                            <a href="{{ $location }}" target="_blank" rel="noopener noreferrer" class="underline hover:opacity-100 font-semibold" onclick="event.stopPropagation()">
+                                                Tham gia Online (Mở link)
+                                            </a>
+                                        @else
+                                            <span class="truncate">{{ $location }}</span>
+                                        @endif
+                                    </div>
+                                @endif
+                                @if($note)
+                                    <p class="text-[11px] opacity-80 italic line-clamp-2">"{{ $note }}"</p>
+                                @endif
+                            </div>
+                        </div>
+
+                        <!-- Footer Tham gia -->
+                        <div class="flex items-center justify-between pt-2 border-t {{ $isMine ? 'border-white/10' : 'border-slate-200 dark:border-slate-700' }}">
+                            <div class="text-[11px] opacity-90 flex items-center gap-1">
+                                <i data-lucide="users" class="w-3.5 h-3.5"></i>
+                                <span id="event-count-{{ $message->id }}">{{ $participantCount }} người tham gia</span>
+                            </div>
+                            <button type="button" onclick="toggleJoinEvent({{ $message->id }})" id="btn-join-event-{{ $message->id }}" class="px-3 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 shadow-xs {{ $hasJoined ? 'bg-emerald-500 text-white hover:bg-emerald-600' : ($isMine ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-slate-200 dark:bg-slate-700 hover:bg-emerald-500 hover:text-white text-slate-700 dark:text-slate-200') }}">
+                                <i data-lucide="{{ $hasJoined ? 'check' : 'user-plus' }}" class="w-3.5 h-3.5"></i>
+                                <span>{{ $hasJoined ? 'Đã tham gia' : 'Tham gia' }}</span>
+                            </button>
+                        </div>
                     </div>
                 @else
                     {!! nl2br(e($message->body)) !!}

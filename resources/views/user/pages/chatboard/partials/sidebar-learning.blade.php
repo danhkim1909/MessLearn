@@ -63,10 +63,10 @@
             <span class="text-[9px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">Sắp có</span>
         </button>
 
-        {{-- Lịch hẹn nhóm - placeholder --}}
-        <button disabled class="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl opacity-60 cursor-not-allowed">
+        {{-- Lịch hẹn nhóm --}}
+        <button type="button" onclick="openModal('modal-create-event')" class="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl hover:border-emerald-500 hover:shadow-md hover:shadow-emerald-500/10 transition-all group">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 flex items-center justify-center">
+                <div class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-500 flex items-center justify-center group-hover:scale-110 transition-transform">
                     <i data-lucide="calendar" class="w-5 h-5"></i>
                 </div>
                 <div class="text-left">
@@ -74,7 +74,7 @@
                     <p class="text-[10px] text-slate-500">Đặt lịch học & sự kiện</p>
                 </div>
             </div>
-            <span class="text-[9px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">Sắp có</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 group-hover:text-emerald-500 transition-colors"></i>
         </button>
 
         {{-- Mini-game --}}

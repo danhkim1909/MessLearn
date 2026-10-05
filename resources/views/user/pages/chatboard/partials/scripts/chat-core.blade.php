@@ -135,6 +135,8 @@ async function createGroup() {
                 replyText = '[Tung xúc xắc]';
             } else if (message.reply_to.type === 'game_rps') {
                 replyText = '[Oẳn tù tì]';
+            } else if (message.reply_to.type === 'event') {
+                replyText = '[Lịch hẹn]: ' + (message.reply_to.body || '');
             }
             innerContent += `
                 <div onclick="scrollToMessage(${message.reply_to_id})" class="cursor-pointer hover:opacity-100 transition-all mb-2 p-2 rounded-xl ${isMine ? 'bg-black/10' : 'bg-black/5 dark:bg-white/5'} border-l-2 ${isMine ? 'border-white/50' : 'border-sky-500'} text-[11px] opacity-80">
@@ -225,6 +227,8 @@ async function createGroup() {
             `;
         } else if (message.type === 'game_rps') {
             innerContent += renderRpsCardHtml(message, isMine);
+        } else if (message.type === 'event') {
+            innerContent += renderEventCardHtml(message, isMine);
         } else {
             innerContent += (message.body || '').replace(/\n/g, "<br>");
         }
@@ -240,6 +244,8 @@ async function createGroup() {
             replyTooltip = '[Tung xúc xắc]';
         } else if (message.type === 'game_rps') {
             replyTooltip = '[Oẳn tù tì]';
+        } else if (message.type === 'event') {
+            replyTooltip = '[Lịch hẹn]: ' + (message.body || '');
         }
 
         return `
@@ -849,6 +855,460 @@ async function createGroup() {
         scrollToMessage(targetId);
     }
 
+    // Xu ly Lich nhac hen hoc tap (Study Event Reminders)
+    function renderEventCardHtml(message, isMine) {
+        const meta = message.metadata || {};
+        const eventTitle = meta.title || message.body || 'Lịch hẹn học tập';
+        const remindAtStr = meta.remind_at || '';
+        const location = meta.location || '';
+        const note = meta.note || '';
+        const participants = meta.participants || {};
+        const participantCount = Object.keys(participants).length;
+        const currentUserId = {{ Auth::id() }};
+        const hasJoined = !!participants[currentUserId];
+
+        let dateBoxHtml = '';
+        let isPast = false;
+
+        if (remindAtStr) {
+            try {
+                const dateObj = new Date(remindAtStr);
+                isPast = dateObj.getTime() < Date.now();
+                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const day = String(dateObj.getDate()).padStart(2, '0');
+                const hours = String(dateObj.getHours()).padStart(2, '0');
+                const mins = String(dateObj.getMinutes()).padStart(2, '0');
+
+                dateBoxHtml = `
+                    <div class="w-13 text-center shrink-0 rounded-xl overflow-hidden border ${isMine ? 'border-white/20 bg-white/10' : 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40'} shadow-xs">
+                        <div class="bg-emerald-500 text-white text-[9px] uppercase font-bold py-0.5">
+                            Thg ${month}
+                        </div>
+                        <div class="py-1">
+                            <div class="font-black text-lg leading-none ${isMine ? 'text-white' : 'text-slate-800 dark:text-slate-100'}">
+                                ${day}
+                            </div>
+                            <div class="text-[9px] font-semibold opacity-75 mt-0.5">
+                                ${hours}:${mins}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch(e) {}
+        }
+
+        let locationHtml = '';
+        if (location) {
+            const isLink = location.startsWith('http://') || location.startsWith('https://');
+            const iconName = isLink ? 'video' : 'map-pin';
+            const displayLoc = isLink 
+                ? `<a href="${location}" target="_blank" rel="noopener noreferrer" class="underline hover:opacity-100 font-semibold" onclick="event.stopPropagation()">Tham gia Online (Mở link)</a>`
+                : `<span class="truncate">${escapeHtmlText(location)}</span>`;
+
+            locationHtml = `
+                <div class="flex items-center gap-1 text-[11px] opacity-90 truncate mb-1">
+                    <i data-lucide="${iconName}" class="w-3.5 h-3.5 shrink-0"></i>
+                    ${displayLoc}
+                </div>
+            `;
+        }
+
+        const noteHtml = note ? `<p class="text-[11px] opacity-80 italic line-clamp-2">"${escapeHtmlText(note)}"</p>` : '';
+
+        return `
+            <div id="event-card-${message.id}" class="flex flex-col gap-2.5 py-1 min-w-[260px] sm:min-w-[300px]">
+                <div class="flex items-center justify-between border-b ${isMine ? 'border-white/20' : 'border-slate-200 dark:border-slate-700'} pb-2">
+                    <div class="flex items-center gap-1.5 font-bold text-xs ${isMine ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}">
+                        <i data-lucide="calendar" class="w-4 h-4"></i>
+                        <span>LỊCH HẸN HỌC TẬP</span>
+                    </div>
+                    <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${isPast ? 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'}">
+                        ${isPast ? 'Đã diễn ra' : 'Sắp tới'}
+                    </span>
+                </div>
+
+                <div class="flex items-start gap-3">
+                    ${dateBoxHtml}
+                    <div class="flex-1 min-w-0">
+                        <h4 class="font-extrabold text-sm leading-tight ${isMine ? 'text-white' : 'text-slate-900 dark:text-white'} mb-1">
+                            ${escapeHtmlText(eventTitle)}
+                        </h4>
+                        ${locationHtml}
+                        ${noteHtml}
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-2 border-t ${isMine ? 'border-white/10' : 'border-slate-200 dark:border-slate-700'}">
+                    <div class="text-[11px] opacity-90 flex items-center gap-1">
+                        <i data-lucide="users" class="w-3.5 h-3.5"></i>
+                        <span id="event-count-${message.id}">${participantCount} người tham gia</span>
+                    </div>
+                    <button type="button" onclick="toggleJoinEvent(${message.id})" id="btn-join-event-${message.id}" class="px-3 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 shadow-xs ${hasJoined ? 'bg-emerald-500 text-white hover:bg-emerald-600' : (isMine ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-slate-200 dark:bg-slate-700 hover:bg-emerald-500 hover:text-white text-slate-700 dark:text-slate-200')}">
+                        <i data-lucide="${hasJoined ? 'check' : 'user-plus'}" class="w-3.5 h-3.5"></i>
+                        <span>${hasJoined ? 'Đã tham gia' : 'Tham gia'}</span>
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    async function submitCreateEvent(e) {
+        if (e) e.preventDefault();
+
+        const titleInput = document.getElementById('event-title');
+        const remindAtInput = document.getElementById('event-remind-at');
+        const locationInput = document.getElementById('event-location');
+        const noteInput = document.getElementById('event-note');
+        const errorEl = document.getElementById('create-event-error');
+        const submitBtn = document.getElementById('btn-submit-event');
+
+        if (!titleInput || !remindAtInput) return;
+
+        const title = titleInput.value.trim();
+        const remindAt = remindAtInput.value;
+
+        if (!title) {
+            if (errorEl) {
+                errorEl.innerText = 'Vui lòng nhập tiêu đề buổi hẹn!';
+                errorEl.classList.remove('hidden');
+            }
+            return;
+        }
+
+        if (!remindAt) {
+            if (errorEl) {
+                errorEl.innerText = 'Vui lòng chọn thời gian bắt đầu!';
+                errorEl.classList.remove('hidden');
+            }
+            return;
+        }
+
+        if (errorEl) errorEl.classList.add('hidden');
+        if (submitBtn) submitBtn.disabled = true;
+
+        try {
+            const remindBeforeInput = document.getElementById('event-remind-before');
+            const remindBefore = remindBeforeInput ? (parseInt(remindBeforeInput.value) || 0) : 15;
+
+            const payload = {
+                title: title,
+                remind_at: remindAt,
+                remind_before: remindBefore,
+                location: locationInput ? locationInput.value.trim() : '',
+                note: noteInput ? noteInput.value.trim() : ''
+            };
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            };
+            if (typeof window.Echo !== 'undefined' && window.Echo.socketId()) {
+                headers['X-Socket-ID'] = window.Echo.socketId();
+            }
+
+            const res = await fetch(`{{ route('app.conversation.event.create', $activeConversation?->id ?? 0) }}`, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                closeModal('modal-create-event');
+                document.getElementById('create-event-form').reset();
+                appendMessageToChat(data);
+                setUpcomingReminderBanner(data);
+                Toastify({
+                    text: "Đã tạo lịch nhắc hẹn học tập thành công!",
+                    style: { background: "#10b981" }
+                }).showToast();
+            } else {
+                Toastify({ text: "Lỗi tạo lịch hẹn", style: { background: "#f43f5e" } }).showToast();
+            }
+        } catch (err) {
+            Toastify({ text: "Lỗi kết nối máy chủ", style: { background: "#f43f5e" } }).showToast();
+        } finally {
+            if (submitBtn) submitBtn.disabled = false;
+        }
+    }
+
+    async function toggleJoinEvent(messageId) {
+        try {
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            };
+            if (typeof window.Echo !== 'undefined' && window.Echo.socketId()) {
+                headers['X-Socket-ID'] = window.Echo.socketId();
+            }
+
+            const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation?->id ?? 0 }}/event/${messageId}/join`, {
+                method: 'POST',
+                headers: headers
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                updateMessageInChat(data);
+                const meta = data.metadata || {};
+                const participants = meta.participants || {};
+                const hasJoined = !!participants[{{ Auth::id() }}];
+                Toastify({
+                    text: hasJoined ? "Bạn đã xác nhận tham gia buổi học!" : "Bạn đã hủy tham gia buổi học",
+                    style: { background: hasJoined ? "#10b981" : "#64748b" }
+                }).showToast();
+            } else {
+                Toastify({ text: "Lỗi tham gia lịch hẹn", style: { background: "#f43f5e" } }).showToast();
+            }
+        } catch (err) {
+            Toastify({ text: "Lỗi kết nối máy chủ", style: { background: "#f43f5e" } }).showToast();
+        }
+    }
+
+    // He thong Canh bao & Am thanh thong bao (Web Audio API - Khong can file mp3 ngoai)
+    function playReminderChime() {
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) return;
+            const ctx = new AudioCtx();
+            if (ctx.state === 'suspended') {
+                ctx.resume();
+            }
+
+            const now = ctx.currentTime;
+
+            // Tieng ting thu 1: Not E5 (659.25Hz)
+            const osc1 = ctx.createOscillator();
+            const gain1 = ctx.createGain();
+            osc1.type = 'sine';
+            osc1.frequency.setValueAtTime(659.25, now);
+            gain1.gain.setValueAtTime(0.25, now);
+            gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+            osc1.connect(gain1);
+            gain1.connect(ctx.destination);
+            osc1.start(now);
+            osc1.stop(now + 0.35);
+
+            // Tieng ting thu 2: Not Ab5 (830.61Hz)
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(830.61, now + 0.15);
+            gain2.gain.setValueAtTime(0.3, now + 0.15);
+            gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc2.start(now + 0.15);
+            osc2.stop(now + 0.55);
+        } catch (e) {
+            console.warn('Audio chime warning:', e);
+        }
+    }
+
+    // Thong bao trinh duyet (HTML5 Notification API)
+    function triggerBrowserNotification(title, body) {
+        if (!("Notification" in window)) return;
+        if (Notification.permission === "granted") {
+            try {
+                new Notification(title, {
+                    body: body,
+                    icon: '/favicon.ico'
+                });
+            } catch (e) {
+                console.warn('Notification warning:', e);
+            }
+        }
+    }
+
+    // An thanh banner nhac hen hien tai
+    function dismissReminderBanner(e) {
+        if (e) e.stopPropagation();
+        const banner = document.getElementById('upcoming-reminder-banner');
+        if (banner) {
+            banner.classList.add('hidden');
+            banner.classList.remove('flex');
+        }
+    }
+
+    // Cuon man hinh toi tin nhan lich hen
+    function jumpToReminderEvent() {
+        const banner = document.getElementById('upcoming-reminder-banner');
+        if (!banner) return;
+        const eventId = parseInt(banner.getAttribute('data-event-id'));
+        if (eventId > 0) {
+            jumpToSearchedMessage(eventId);
+        }
+    }
+
+    // Cap nhat Banner khi nhan su kien moi hoac tao moi
+    function setUpcomingReminderBanner(message) {
+        if (!message || message.type !== 'event') return;
+        const banner = document.getElementById('upcoming-reminder-banner');
+        if (!banner) return;
+
+        const meta = message.metadata || {};
+        const newRemindAtStr = meta.remind_at;
+        if (!newRemindAtStr) return;
+
+        const newTarget = new Date(newRemindAtStr.replace(' ', 'T')).getTime();
+        if (isNaN(newTarget)) return;
+
+        const now = Date.now();
+        // Neu su kien da qua hon 2 tieng thi khong can hien
+        if (newTarget < now - 2 * 3600 * 1000) return;
+
+        const currentEventId = parseInt(banner.getAttribute('data-event-id')) || 0;
+        const currentRemindAtStr = banner.getAttribute('data-remind-at');
+        const isHidden = banner.classList.contains('hidden');
+
+        let shouldUpdate = false;
+        if (isHidden || currentEventId === 0 || !currentRemindAtStr) {
+            shouldUpdate = true;
+        } else {
+            const currentTarget = new Date(currentRemindAtStr.replace(' ', 'T')).getTime();
+            if (currentEventId === message.id || newTarget <= currentTarget) {
+                shouldUpdate = true;
+            }
+        }
+
+        if (shouldUpdate) {
+            banner.setAttribute('data-event-id', message.id);
+            banner.setAttribute('data-remind-at', newRemindAtStr);
+            banner.setAttribute('data-remind-before', meta.remind_before || 15);
+            banner.setAttribute('data-location', meta.location || '');
+
+            const titleEl = document.getElementById('reminder-banner-title');
+            if (titleEl) {
+                titleEl.innerText = meta.title || message.body || '';
+            }
+
+            const timeEl = document.getElementById('reminder-banner-time');
+            if (timeEl) {
+                timeEl.removeAttribute('data-formatted');
+            }
+
+            const joinLinkBtn = document.getElementById('btn-reminder-join-link');
+            if (joinLinkBtn) {
+                const loc = (meta.location || '').trim();
+                const isOnline = loc.startsWith('http://') || loc.startsWith('https://');
+                if (isOnline) {
+                    joinLinkBtn.href = loc;
+                    joinLinkBtn.classList.remove('hidden');
+                    joinLinkBtn.classList.add('flex');
+                } else {
+                    joinLinkBtn.href = '#';
+                    joinLinkBtn.classList.add('hidden');
+                    joinLinkBtn.classList.remove('flex');
+                }
+            }
+
+            banner.classList.remove('hidden');
+            banner.classList.add('flex');
+            lucide.createIcons();
+
+            updateReminderBannerCountdown();
+        }
+    }
+
+    // Bo dem nguoc thoi gian cho Banner va kich hoat Canh bao
+    function updateReminderBannerCountdown() {
+        const banner = document.getElementById('upcoming-reminder-banner');
+        if (!banner || banner.classList.contains('hidden')) return;
+
+        const eventId = banner.getAttribute('data-event-id');
+        const remindAtStr = banner.getAttribute('data-remind-at');
+        const remindBefore = parseInt(banner.getAttribute('data-remind-before')) || 15;
+        const countdownEl = document.getElementById('reminder-banner-countdown');
+        const timeEl = document.getElementById('reminder-banner-time');
+        const titleEl = document.getElementById('reminder-banner-title');
+        const eventTitle = titleEl ? titleEl.innerText : 'Lịch hẹn học tập';
+
+        if (!remindAtStr || !countdownEl) return;
+
+        const targetTime = new Date(remindAtStr.replace(' ', 'T')).getTime();
+        if (isNaN(targetTime)) return;
+
+        // Dinh dang gio:phut ngay/thang
+        if (timeEl && !timeEl.getAttribute('data-formatted')) {
+            const d = new Date(targetTime);
+            const hours = String(d.getHours()).padStart(2, '0');
+            const mins = String(d.getMinutes()).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            timeEl.innerText = `${hours}:${mins}, ${day}/${month}`;
+            timeEl.setAttribute('data-formatted', '1');
+        }
+
+        const now = Date.now();
+        const diff = targetTime - now;
+
+        if (diff > 0) {
+            // Su kien sap dien ra
+            const days = Math.floor(diff / 86400000);
+            const hours = Math.floor((diff % 86400000) / 3600000);
+            const minutes = Math.floor((diff % 3600000) / 60000);
+            const seconds = Math.floor((diff % 60000) / 1000);
+
+            let countdownText = 'Còn ';
+            if (days > 0) {
+                countdownText += `${days} ngày ${hours} giờ`;
+            } else if (hours > 0) {
+                countdownText += `${hours} giờ ${minutes} phút`;
+            } else if (minutes > 0) {
+                countdownText += `${minutes} phút ${seconds < 10 ? '0' : ''}${seconds}s`;
+            } else {
+                countdownText += `${seconds} giây`;
+            }
+
+            countdownEl.innerText = countdownText;
+            countdownEl.className = 'font-bold text-amber-600 dark:text-amber-400';
+
+            // Kiem tra nguong bao chuong truoc
+            const thresholdMs = remindBefore * 60 * 1000;
+            if (diff <= thresholdMs) {
+                const sessionKey = `alerted_event_${eventId}_${remindBefore}`;
+                if (!sessionStorage.getItem(sessionKey)) {
+                    sessionStorage.setItem(sessionKey, '1');
+                    playReminderChime();
+                    const remainMinutes = Math.max(1, Math.ceil(diff / 60000));
+                    triggerBrowserNotification(
+                        'Sắp đến lịch hẹn học tập!',
+                        `Buổi học "${eventTitle}" sẽ bắt đầu sau ${remainMinutes} phút!`
+                    );
+                    Toastify({
+                        text: `Sắp đến giờ học: ${eventTitle} (sau ${remainMinutes} phút)`,
+                        duration: 6000,
+                        style: { background: "#f59e0b" }
+                    }).showToast();
+                }
+            }
+        } else if (diff > -7200000) {
+            // Dang dien ra (trong vong 2 tieng ke tu gio hen)
+            countdownEl.innerText = 'Đang diễn ra';
+            countdownEl.className = 'font-bold text-emerald-600 dark:text-emerald-400 animate-pulse';
+
+            // Thong bao dung gio bat dau (neu chua bao)
+            const startKey = `started_event_${eventId}`;
+            if (!sessionStorage.getItem(startKey)) {
+                sessionStorage.setItem(startKey, '1');
+                playReminderChime();
+                triggerBrowserNotification(
+                    'Lịch học đang diễn ra!',
+                    `Buổi học "${eventTitle}" đã bắt đầu. Hãy tham gia ngay!`
+                );
+                Toastify({
+                    text: `Buổi học "${eventTitle}" đang diễn ra!`,
+                    duration: 6000,
+                    style: { background: "#10b981" }
+                }).showToast();
+            }
+        } else {
+            // Da ket thuc qua 2 tieng -> An banner
+            banner.classList.add('hidden');
+            banner.classList.remove('flex');
+        }
+    }
+
     // Xu ly Ghim / Bo ghim tin nhan (Pin Messages)
     async function togglePinMessage(messageId) {
         try {
@@ -956,6 +1416,7 @@ async function createGroup() {
             else if (message.type === 'quiz') previewText = '[Bài kiểm tra]: ' + (message.body || '');
             else if (message.type === 'game_dice') previewText = '[Tung xúc xắc]';
             else if (message.type === 'game_rps') previewText = '[Oẳn tù tì]';
+            else if (message.type === 'event') previewText = '[Lịch hẹn]: ' + (message.body || '');
 
             previewEl.innerText = previewText;
             bar.classList.remove('hidden');
@@ -982,15 +1443,30 @@ async function createGroup() {
 
         smartScrollToBottom(true, false);
 
+        // Khoi tao quyen thong bao trinh duyet neu chua hoi
+        if ("Notification" in window && Notification.permission === "default") {
+            Notification.requestPermission();
+        }
+
+        // Khoi chay bo dem nguoc thoi gian cho lich hen
+        updateReminderBannerCountdown();
+        setInterval(updateReminderBannerCountdown, 1000);
+
         if (typeof window.Echo !== 'undefined') {
             window.Echo.private('conversation.{{ $activeConversation?->id ?? 0 }}')
                 .listen('.MessageSent', (e) => {
                     hideTypingIndicator();
                     appendMessageToChat(e.message);
+                    if (e.message.type === 'event') {
+                        setUpcomingReminderBanner(e.message);
+                    }
                 })
                 .listen('.MessageUpdated', (e) => {
                     updateMessageInChat(e.message);
                     handleMessagePinnedUpdated(e.message);
+                    if (e.message.type === 'event') {
+                        setUpcomingReminderBanner(e.message);
+                    }
                 })
                 .listenForWhisper('typing', (e) => {
                     if (e.user_id !== {{ Auth::id() }}) {

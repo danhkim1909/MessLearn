@@ -382,4 +382,96 @@ class MessageController extends Controller
             return response()->json(['error' => 'Da xay ra loi may chu'], 500);
         }
     }
+
+    public function createEvent(Request $request, Conversation $conversation)
+    {
+        try {
+            $userId = Auth::id();
+
+            if (!$conversation->participants()->where('user_id', $userId)->exists()) {
+                return response()->json(['error' => 'Forbidden'], 403);
+            }
+
+            $request->validate([
+                'title' => 'required|string|max:255',
+                'remind_at' => 'required|string',
+            ]);
+
+            $currentUser = Auth::user();
+
+            $metadata = [
+                'title' => trim($request->input('title')),
+                'remind_at' => $request->input('remind_at'),
+                'remind_before' => (int)$request->input('remind_before', 15),
+                'location' => trim((string)$request->input('location', '')),
+                'note' => trim((string)$request->input('note', '')),
+                'participants' => [
+                    $userId => [
+                        'id' => $userId,
+                        'name' => $currentUser->name,
+                        'joined_at' => now()->toIso8601String(),
+                    ]
+                ],
+            ];
+
+            $message = $conversation->messages()->create([
+                'user_id' => $userId,
+                'type' => 'event',
+                'body' => trim($request->input('title')),
+                'metadata' => $metadata,
+            ]);
+
+            $conversation->touch();
+            $message->load(['user', 'replyTo.user', 'quiz.submissions', 'reactions']);
+
+            broadcast(new MessageSent($message))->toOthers();
+
+            return response()->json($message);
+        } catch (Exception $e) {
+            Log::error("Loi khi tao lich hen: " . $e->getMessage());
+            return response()->json(['error' => 'Da xay ra loi may chu'], 500);
+        }
+    }
+
+    public function toggleJoinEvent(Request $request, Conversation $conversation, Message $message)
+    {
+        try {
+            $userId = Auth::id();
+
+            if (!$conversation->participants()->where('user_id', $userId)->exists()) {
+                return response()->json(['error' => 'Forbidden'], 403);
+            }
+
+            if ((int)$message->conversation_id !== (int)$conversation->id || $message->type !== 'event') {
+                return response()->json(['error' => 'Yeu cau khong hop le'], 400);
+            }
+
+            $metadata = $message->metadata ?? [];
+            $participants = $metadata['participants'] ?? [];
+
+            if (isset($participants[$userId])) {
+                unset($participants[$userId]);
+            } else {
+                $currentUser = Auth::user();
+                $participants[$userId] = [
+                    'id' => $userId,
+                    'name' => $currentUser->name,
+                    'joined_at' => now()->toIso8601String(),
+                ];
+            }
+
+            $metadata['participants'] = $participants;
+            $message->metadata = $metadata;
+            $message->save();
+
+            $message->load(['user', 'replyTo.user', 'quiz.submissions', 'reactions']);
+
+            broadcast(new MessageUpdated($message))->toOthers();
+
+            return response()->json($message);
+        } catch (Exception $e) {
+            Log::error("Loi khi tham gia lich hen: " . $e->getMessage());
+            return response()->json(['error' => 'Da xay ra loi may chu'], 500);
+        }
+    }
 }
