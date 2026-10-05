@@ -39,11 +39,35 @@
         </button>
     </div>
 
+    <!-- Preview Tài liệu đính kèm -->
+    <div id="document-preview-container" class="hidden mb-3 mx-12 p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl items-center justify-between">
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+            <div id="doc-preview-icon-wrap" class="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0">
+                <i data-lucide="file-text" id="doc-preview-icon" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+                <div id="document-preview-filename" class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate"></div>
+                <div class="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    <span id="document-preview-filesize"></span>
+                    <span>•</span>
+                    <span class="text-sky-500 font-medium">Tài liệu đính kèm</span>
+                </div>
+            </div>
+        </div>
+        <button type="button" onclick="cancelDocumentSelection()" class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shrink-0 ml-3">
+            <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+    </div>
+
     <!-- Form gửi tin nhắn chính -->
     <form id="chat-form" class="flex items-end gap-2" onsubmit="sendChatMessage(event)">
         <input type="hidden" id="reply-to-id" value="">
         <input type="file" id="image-file-input" accept="image/*" class="hidden" onchange="handleImageSelected(event)">
+        <input type="file" id="document-file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.markdown,.csv,.tsv,.json,.sql,.cpp,.c,.java,.py,.html,.css,.js,.zip,.rar,.7z" class="hidden" onchange="handleDocumentSelected(event)">
         <button type="button" onclick="document.getElementById('image-file-input').click()" class="p-3 text-slate-400 hover:text-sky-500 transition-colors" title="Đính kèm ảnh">
+            <i data-lucide="image" class="w-5 h-5"></i>
+        </button>
+        <button type="button" onclick="document.getElementById('document-file-input').click()" class="p-3 text-slate-400 hover:text-sky-500 transition-colors" title="Đính kèm tài liệu học tập">
             <i data-lucide="paperclip" class="w-5 h-5"></i>
         </button>
         <div class="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-1 relative">

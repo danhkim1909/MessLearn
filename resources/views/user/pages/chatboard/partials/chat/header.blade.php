@@ -79,6 +79,8 @@
                             [Oẳn tù tì]
                         @elseif($pinnedMessage->type === 'event')
                             [Lịch hẹn]: {{ $pinnedMessage->body }}
+                        @elseif($pinnedMessage->type === 'document')
+                            [Tài liệu]: {{ $pinnedMessage->metadata['file_name'] ?? $pinnedMessage->body }}
                         @else
                             {{ $pinnedMessage->body }}
                         @endif
@@ -92,7 +94,14 @@
     </div>
 
     <!-- Thanh Banner Nhac hen sap toi (Upcoming Reminder Banner Zalo-style) -->
-    <div id="upcoming-reminder-banner" class="{{ ($upcomingEvent ?? false) ? 'flex' : 'hidden' }} items-center justify-between px-6 py-2.5 bg-amber-500/10 dark:bg-amber-950/30 border-t border-amber-200/60 dark:border-amber-800/40 text-xs transition-all z-20" data-event-id="{{ $upcomingEvent?->id ?? 0 }}" data-remind-at="{{ $upcomingEvent?->metadata['remind_at'] ?? '' }}" data-remind-before="{{ $upcomingEvent?->metadata['remind_before'] ?? 15 }}" data-location="{{ $upcomingEvent?->metadata['location'] ?? '' }}">
+    @php
+        $userJoinedUpcoming = false;
+        if ($upcomingEvent ?? false) {
+            $metaParticipants = $upcomingEvent->metadata['participants'] ?? [];
+            $userJoinedUpcoming = isset($metaParticipants[Auth::id()]) || ($upcomingEvent->user_id === Auth::id());
+        }
+    @endphp
+    <div id="upcoming-reminder-banner" class="{{ ($upcomingEvent ?? false) ? 'flex' : 'hidden' }} items-center justify-between px-6 py-2.5 bg-amber-500/10 dark:bg-amber-950/30 border-t border-amber-200/60 dark:border-amber-800/40 text-xs transition-all z-20" data-event-id="{{ $upcomingEvent?->id ?? 0 }}" data-remind-at="{{ $upcomingEvent?->metadata['remind_at'] ?? '' }}" data-remind-before="{{ $upcomingEvent?->metadata['remind_before'] ?? 15 }}" data-location="{{ $upcomingEvent?->metadata['location'] ?? '' }}" data-joined="{{ $userJoinedUpcoming ? '1' : '0' }}">
         <div class="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer hover:opacity-90 transition-opacity" onclick="jumpToReminderEvent()">
             <div class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
                 <i data-lucide="bell-ring" class="w-4 h-4 animate-bounce"></i>

@@ -82,7 +82,7 @@ class ChatBoardController extends Controller
                 if (!$remindAt) return false;
                 try {
                     $dt = \Carbon\Carbon::parse($remindAt);
-                    return $dt->greaterThanOrEqualTo($now->copy()->subHours(2));
+                    return $dt->greaterThanOrEqualTo($now);
                 } catch (\Exception $e) {
                     return false;
                 }

@@ -34,6 +34,8 @@ Route::prefix('app')->middleware(CheckLoginMiddleware::class)->name('app.')->gro
         Route::get('/{conversation}/messages/search', [\App\Http\Controllers\User\MessageController::class, 'search'])->name('message.search');
         Route::post('/{conversation}/reaction/{message}', [\App\Http\Controllers\User\MessageController::class, 'toggleReaction'])->name('message.reaction');
         Route::post('/{conversation}/message/{message}/pin', [\App\Http\Controllers\User\MessageController::class, 'togglePin'])->name('message.pin');
+        Route::post('/{conversation}/message/{message}/forward', [\App\Http\Controllers\User\MessageController::class, 'forward'])->name('message.forward');
+        Route::post('/{conversation}/message/{message}/unsend', [\App\Http\Controllers\User\MessageController::class, 'unsend'])->name('message.unsend');
         Route::post('/{conversation}/event/create', [\App\Http\Controllers\User\MessageController::class, 'createEvent'])->name('event.create');
         Route::post('/{conversation}/event/{message}/join', [\App\Http\Controllers\User\MessageController::class, 'toggleJoinEvent'])->name('event.join');
         Route::post('/{conversation}/game/dice', [\App\Http\Controllers\User\MessageController::class, 'rollDice'])->name('game.dice');

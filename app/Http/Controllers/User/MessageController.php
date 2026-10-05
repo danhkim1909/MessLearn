@@ -12,6 +12,7 @@ use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class MessageController extends Controller
 {
@@ -27,6 +28,8 @@ class MessageController extends Controller
 
             $hasAudio = $request->hasFile('audio');
             $hasImage = $request->hasFile('image');
+            $hasDocument = $request->hasFile('document');
+            $metadata = null;
 
             if ($hasAudio) {
                 $request->validate([
@@ -46,6 +49,36 @@ class MessageController extends Controller
 
                 $filePath = $request->file('image')->store('images', 'public');
                 $type = 'image';
+            } elseif ($hasDocument) {
+                $request->validate([
+                    'document' => ['required', 'file', 'max:25600'],
+                    'body' => 'nullable|string|max:2000',
+                    'reply_to_id' => 'nullable|exists:messages,id',
+                ]);
+
+                $docFile = $request->file('document');
+                $origName = $docFile->getClientOriginalName();
+                $ext = strtolower($docFile->getClientOriginalExtension());
+                $sizeBytes = $docFile->getSize();
+
+                if ($sizeBytes >= 1048576) {
+                    $sizeHuman = number_format($sizeBytes / 1048576, 2) . ' MB';
+                } elseif ($sizeBytes >= 1024) {
+                    $sizeHuman = number_format($sizeBytes / 1024, 1) . ' KB';
+                } else {
+                    $sizeHuman = $sizeBytes . ' B';
+                }
+
+                $filePath = $docFile->store('documents', 'public');
+                $type = 'document';
+
+                $metadata = [
+                    'file_name' => $origName,
+                    'file_extension' => $ext,
+                    'file_size' => $sizeBytes,
+                    'file_size_human' => $sizeHuman,
+                    'mime_type' => $docFile->getMimeType(),
+                ];
             } else {
                 $request->validate([
                     'body' => 'required|string|max:2000',
@@ -63,6 +96,7 @@ class MessageController extends Controller
                 'body' => $request->body,
                 'file_path' => $filePath,
                 'reply_to_id' => $request->reply_to_id,
+                'metadata' => $metadata,
             ]);
 
             $message->load(['user', 'replyTo.user', 'reactions']);
@@ -471,6 +505,121 @@ class MessageController extends Controller
             return response()->json($message);
         } catch (Exception $e) {
             Log::error("Loi khi tham gia lich hen: " . $e->getMessage());
+            return response()->json(['error' => 'Da xay ra loi may chu'], 500);
+        }
+    }
+
+    public function forward(Request $request, Conversation $conversation, Message $message)
+    {
+        try {
+            $userId = Auth::id();
+
+            if (!$conversation->participants()->where('user_id', $userId)->exists()) {
+                return response()->json(['error' => 'Forbidden'], 403);
+            }
+
+            if ($message->type === 'recalled') {
+                return response()->json(['error' => 'Khong the chuyen tiep tin nhan da thu hoi'], 400);
+            }
+
+            $request->validate([
+                'target_conversation_ids' => 'required|array|min:1',
+                'target_conversation_ids.*' => 'required|integer|exists:conversations,id',
+            ]);
+
+            $targetIds = array_unique($request->input('target_conversation_ids'));
+            $createdMessages = [];
+
+            foreach ($targetIds as $targetId) {
+                $targetConv = Conversation::find($targetId);
+                if (!$targetConv) {
+                    continue;
+                }
+
+                if (!$targetConv->participants()->where('user_id', $userId)->exists()) {
+                    continue;
+                }
+
+                $metadata = $message->metadata ?? [];
+                $metadata['is_forwarded'] = true;
+                $metadata['forwarded_from_user'] = $message->user?->name ?? 'Nguoi dung';
+
+                $newMsg = Message::create([
+                    'conversation_id' => $targetConv->id,
+                    'user_id' => $userId,
+                    'type' => $message->type,
+                    'body' => $message->body,
+                    'file_path' => $message->file_path,
+                    'quiz_id' => $message->quiz_id,
+                    'reply_to_id' => null,
+                    'metadata' => $metadata,
+                ]);
+
+                $newMsg->load(['user', 'replyTo.user', 'quiz.submissions', 'reactions']);
+                $targetConv->touch();
+
+                broadcast(new MessageSent($newMsg))->toOthers();
+                $createdMessages[] = $newMsg;
+            }
+
+            return response()->json([
+                'success' => true,
+                'forwarded_count' => count($createdMessages),
+                'messages' => $createdMessages,
+            ]);
+        } catch (Exception $e) {
+            Log::error("Loi khi chuyen tiep tin nhan {$message->id}: " . $e->getMessage());
+            return response()->json(['error' => 'Da xay ra loi may chu'], 500);
+        }
+    }
+
+    public function unsend(Request $request, Conversation $conversation, Message $message)
+    {
+        try {
+            $userId = Auth::id();
+
+            if ($message->user_id !== $userId) {
+                return response()->json(['error' => 'Ban khong co quyen thu hoi tin nhan nay'], 403);
+            }
+
+            if ((int)$message->conversation_id !== (int)$conversation->id) {
+                return response()->json(['error' => 'Yeu cau khong hop le'], 400);
+            }
+
+            if ($message->type === 'recalled') {
+                return response()->json(['success' => true, 'message' => $message]);
+            }
+
+            $filePath = $message->file_path;
+
+            $message->update([
+                'type' => 'recalled',
+                'body' => 'Tin nhắn đã được thu hồi',
+                'file_path' => null,
+                'is_pinned' => false,
+                'metadata' => null,
+            ]);
+
+            if ($filePath) {
+                $stillInUse = Message::where('file_path', $filePath)->exists();
+                if (!$stillInUse) {
+                    Storage::disk('public')->delete($filePath);
+                }
+            }
+
+            MessageReaction::where('message_id', $message->id)->delete();
+
+            $message->load(['user', 'replyTo.user', 'quiz.submissions', 'reactions']);
+            $conversation->touch();
+
+            broadcast(new MessageUpdated($message))->toOthers();
+
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+            ]);
+        } catch (Exception $e) {
+            Log::error("Loi khi thu hoi tin nhan {$message->id}: " . $e->getMessage());
             return response()->json(['error' => 'Da xay ra loi may chu'], 500);
         }
     }

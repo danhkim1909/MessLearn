@@ -1,5 +1,6 @@
 @php
     $isMine = $message->user_id === Auth::id();
+    $isRecalled = $message->type === 'recalled';
 @endphp
 <div id="msg-{{ $message->id }}" class="flex {{ $isMine ? 'justify-end' : 'justify-start' }}">
     <div class="flex gap-2 max-w-[75%] {{ $isMine ? 'flex-row-reverse' : 'flex-row' }}">
@@ -19,6 +20,12 @@
                     <span class="text-[10px] text-slate-400">{{ $message->created_at->format('H:i') }}</span>
                 </div>
             @endif
+            @if($isRecalled)
+                <div class="border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-400 dark:text-slate-500 italic px-3.5 py-2 rounded-2xl text-xs max-w-md flex items-center gap-1.5 select-none">
+                    <i data-lucide="ban" class="w-3.5 h-3.5 shrink-0 opacity-70"></i>
+                    <span>Tin nhắn đã được thu hồi</span>
+                </div>
+            @else
             <div class="{{ $isMine ? 'bg-sky-500 text-white rounded-tr-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-sm' }} px-4 py-2.5 rounded-2xl text-xs max-w-md relative group">
                 @if($message->replyTo)
                     <div onclick="scrollToMessage({{ $message->reply_to_id }})" class="cursor-pointer hover:opacity-100 transition-all mb-2 p-2 rounded-xl {{ $isMine ? 'bg-black/10' : 'bg-black/5 dark:bg-white/5' }} border-l-2 {{ $isMine ? 'border-white/50' : 'border-sky-500' }} text-[11px] opacity-80">
@@ -72,9 +79,17 @@
                     <button type="button" onclick="prepareReply({{ $message->id }}, '{{ addslashes($message->user->name) }}', '{{ addslashes(str_replace(["\r", "\n"], ' ', \Illuminate\Support\Str::limit($replyPreview, 50))) }}')" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm flex items-center justify-center transition-colors" title="Trả lời">
                         <i data-lucide="reply" class="w-3.5 h-3.5"></i>
                     </button>
+                    <button type="button" onclick="openForwardModal({{ $message->id }})" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-indigo-500 shadow-sm flex items-center justify-center transition-colors" title="Chuyển tiếp">
+                        <i data-lucide="forward" class="w-3.5 h-3.5"></i>
+                    </button>
                     <button type="button" onclick="togglePinMessage({{ $message->id }})" id="btn-pin-{{ $message->id }}" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-500 shadow-sm flex items-center justify-center transition-colors" title="{{ $message->is_pinned ? 'Bỏ ghim' : 'Ghim tin nhắn' }}">
                         <i data-lucide="pin" class="w-3.5 h-3.5 {{ $message->is_pinned ? 'text-amber-500 fill-amber-500' : '' }}"></i>
                     </button>
+                    @if($isMine)
+                        <button type="button" onclick="confirmUnsendMessage({{ $message->id }})" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-500 shadow-sm flex items-center justify-center transition-colors" title="Gỡ tin nhắn">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    @endif
                 </div>
 
                 <!-- Huy hieu Da ghim -->
@@ -82,6 +97,14 @@
                     <i data-lucide="pin" class="w-3 h-3 fill-current"></i>
                     <span>Đã ghim</span>
                 </div>
+
+                <!-- Huy hieu Da chuyen tiep -->
+                @if(!empty($message->metadata['is_forwarded']))
+                    <div class="flex items-center gap-1 text-[10px] {{ $isMine ? 'text-sky-100' : 'text-slate-400 dark:text-slate-400' }} font-medium italic mb-1.5 pb-1 border-b {{ $isMine ? 'border-white/20' : 'border-slate-200/60 dark:border-slate-700/60' }}">
+                        <i data-lucide="forward" class="w-3 h-3"></i>
+                        <span>Đã chuyển tiếp</span>
+                    </div>
+                @endif
 
                 @if($message->type === 'quiz')
                     <div class="flex flex-col gap-2 {{ $isMine ? 'text-white' : 'text-slate-800 dark:text-slate-200' }}">
@@ -343,6 +366,82 @@
                             </button>
                         </div>
                     </div>
+                @elseif($message->type === 'document')
+                    @php
+                        $docMeta = $message->metadata ?? [];
+                        $fileName = $docMeta['file_name'] ?? 'Tài liệu đính kèm';
+                        $ext = strtolower($docMeta['file_extension'] ?? pathinfo($fileName, PATHINFO_EXTENSION));
+                        $fileSize = $docMeta['file_size_human'] ?? '';
+                        $docUrl = $message->file_url ?? asset('storage/' . $message->file_path);
+                        $canPreview = in_array($ext, ['pdf', 'md', 'markdown', 'txt', 'csv', 'tsv', 'json', 'sql', 'py', 'cpp', 'c', 'java', 'html', 'css', 'js', 'log']);
+
+                        $iconName = 'file-text';
+                        $iconColor = $isMine ? 'text-slate-600' : 'text-sky-500';
+                        $iconBg = $isMine ? 'bg-white shadow-xs' : 'bg-sky-500/10 dark:bg-sky-500/20';
+
+                        if ($ext === 'pdf') {
+                            $iconName = 'file-text';
+                            $iconColor = $isMine ? 'text-rose-600' : 'text-rose-500';
+                            $iconBg = $isMine ? 'bg-white shadow-xs' : 'bg-rose-500/10 dark:bg-rose-500/20';
+                        } elseif (in_array($ext, ['doc', 'docx'])) {
+                            $iconName = 'file-text';
+                            $iconColor = $isMine ? 'text-blue-600' : 'text-blue-600 dark:text-blue-400';
+                            $iconBg = $isMine ? 'bg-white shadow-xs' : 'bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/40';
+                        } elseif (in_array($ext, ['xls', 'xlsx', 'csv', 'tsv'])) {
+                            $iconName = 'table';
+                            $iconColor = $isMine ? 'text-emerald-600' : 'text-emerald-500';
+                            $iconBg = $isMine ? 'bg-white shadow-xs' : 'bg-emerald-500/10 dark:bg-emerald-500/20';
+                        } elseif (in_array($ext, ['ppt', 'pptx'])) {
+                            $iconName = 'presentation';
+                            $iconColor = $isMine ? 'text-amber-600' : 'text-amber-500';
+                            $iconBg = $isMine ? 'bg-white shadow-xs' : 'bg-amber-500/10 dark:bg-amber-500/20';
+                        } elseif (in_array($ext, ['zip', 'rar', '7z', 'tar', 'gz'])) {
+                            $iconName = 'archive';
+                            $iconColor = $isMine ? 'text-orange-600' : 'text-orange-500';
+                            $iconBg = $isMine ? 'bg-white shadow-xs' : 'bg-orange-500/10 dark:bg-orange-500/20';
+                        } elseif (in_array($ext, ['md', 'markdown', 'txt', 'json', 'sql', 'py', 'cpp', 'c', 'java', 'html', 'css', 'js', 'log'])) {
+                            $iconName = 'file-code';
+                            $iconColor = $isMine ? 'text-purple-600' : 'text-purple-500';
+                            $iconBg = $isMine ? 'bg-white shadow-xs' : 'bg-purple-500/10 dark:bg-purple-500/20';
+                        }
+                    @endphp
+                    <div class="flex flex-col gap-2 min-w-[240px] sm:min-w-[280px]">
+                        <div class="flex items-center gap-3 p-3 rounded-2xl {{ $isMine ? 'bg-black/10 border border-white/20' : 'bg-black/5 dark:bg-white/5 border border-slate-200 dark:border-slate-700/60' }} transition-all">
+                            <div class="w-11 h-11 rounded-xl {{ $iconBg }} {{ $iconColor }} flex items-center justify-center shrink-0 shadow-xs">
+                                <i data-lucide="{{ $iconName }}" class="w-6 h-6"></i>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h4 class="font-bold text-xs {{ $isMine ? 'text-white' : 'text-slate-800 dark:text-slate-100' }} truncate" title="{{ $fileName }}">
+                                    {{ $fileName }}
+                                </h4>
+                                <div class="flex items-center gap-2 text-[10px] {{ $isMine ? 'text-white/70' : 'text-slate-500 dark:text-slate-400' }} mt-0.5">
+                                    <span class="font-medium uppercase">{{ $ext }}</span>
+                                    @if($fileSize)
+                                        <span>•</span>
+                                        <span>{{ $fileSize }}</span>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Nut Hanh dong: Xem truc tiep va Tai ve -->
+                        <div class="flex items-center gap-2 pt-0.5">
+                            @if($canPreview)
+                                <button type="button" onclick="openDocumentViewer('{{ $docUrl }}', '{{ addslashes($fileName) }}', '{{ $ext }}')" class="flex-1 py-1.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 {{ $isMine ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-sky-500 hover:bg-sky-600 text-white shadow-xs' }}">
+                                    <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                    <span>Xem trực tiếp</span>
+                                </button>
+                            @endif
+                            <a href="{{ $docUrl }}" download="{{ $fileName }}" class="{{ $canPreview ? 'px-3 py-1.5' : 'flex-1 py-1.5 px-3' }} rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 {{ $isMine ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200' }}" title="Tải tài liệu về máy">
+                                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                                <span>{{ $canPreview ? 'Tải' : 'Tải tài liệu' }}</span>
+                            </a>
+                        </div>
+
+                        @if($message->body)
+                            <p class="text-xs pt-1 opacity-90 {{ $isMine ? 'text-white' : 'text-slate-800 dark:text-slate-200' }}">{!! nl2br(e($message->body)) !!}</p>
+                        @endif
+                    </div>
                 @else
                     {!! nl2br(e($message->body)) !!}
                 @endif
@@ -372,6 +471,7 @@
                     @endforeach
                 </div>
             </div>
+            @endif
         </div>
     </div>
 </div>

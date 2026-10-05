@@ -1,27 +1,229 @@
 <script>
-// Generic Modals & Friend / Group
+// Generic Modals & Friend / Group Management
 function openModal(id) {
-    document.getElementById(id).classList.remove('hidden');
-    if (id === 'modal-create-quiz') {
+    const modalEl = document.getElementById(id);
+    if (!modalEl) return;
+    modalEl.classList.remove('hidden');
+
+    if (id === 'modal-add-friend') {
+        resetAddFriendModal();
+    } else if (id === 'modal-create-group') {
+        resetCreateGroupModal();
+    } else if (id === 'modal-create-quiz') {
         const container = document.getElementById('quiz-builder-container');
         if (container && container.children.length === 0) {
             addQuizQuestion();
         }
     }
+
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+    }
 }
 
 function closeModal(id) {
-    document.getElementById(id).classList.add('hidden');
+    const modalEl = document.getElementById(id);
+    if (modalEl) {
+        modalEl.classList.add('hidden');
+    }
 }
 
-async function sendFriendRequest() {
-    const email = document.getElementById('add-friend-email').value;
+// ---------------------------------------------------------
+// LOGIC MODAL: KET BAN (ADD FRIEND)
+// ---------------------------------------------------------
+let currentSearchedUser = null;
+
+function resetAddFriendModal() {
+    const emailInput = document.getElementById('add-friend-email');
+    if (emailInput) emailInput.value = '';
+
+    const hintEl = document.getElementById('add-friend-hint');
+    const loadingEl = document.getElementById('add-friend-loading');
+    const notFoundEl = document.getElementById('add-friend-not-found');
+    const userCardEl = document.getElementById('add-friend-user-card');
     const msgEl = document.getElementById('add-friend-msg');
-    
+
+    if (hintEl) hintEl.classList.remove('hidden');
+    if (loadingEl) loadingEl.classList.add('hidden');
+    if (notFoundEl) notFoundEl.classList.add('hidden');
+    if (userCardEl) userCardEl.classList.add('hidden');
+    if (msgEl) {
+        msgEl.classList.add('hidden');
+        msgEl.innerText = '';
+    }
+    currentSearchedUser = null;
+}
+
+async function searchFriendByEmail() {
+    const emailInput = document.getElementById('add-friend-email');
+    const email = emailInput ? emailInput.value.trim() : '';
+
+    const hintEl = document.getElementById('add-friend-hint');
+    const loadingEl = document.getElementById('add-friend-loading');
+    const notFoundEl = document.getElementById('add-friend-not-found');
+    const notFoundText = document.getElementById('add-friend-not-found-text');
+    const userCardEl = document.getElementById('add-friend-user-card');
+    const msgEl = document.getElementById('add-friend-msg');
+
     if (!email) {
-        msgEl.innerText = 'Vui lòng nhập email!';
-        msgEl.className = 'text-xs mt-2 text-rose-500 block';
+        if (msgEl) {
+            msgEl.innerText = 'Vui long nhap dia chi email can tim kiem.';
+            msgEl.className = 'text-xs text-center text-rose-500 block';
+        }
         return;
+    }
+
+    if (hintEl) hintEl.classList.add('hidden');
+    if (notFoundEl) notFoundEl.classList.add('hidden');
+    if (userCardEl) userCardEl.classList.add('hidden');
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (msgEl) msgEl.classList.add('hidden');
+
+    try {
+        const url = '{{ route('app.friend.search') }}?email=' + encodeURIComponent(email);
+        const res = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+            }
+        });
+
+        const data = await res.json();
+        if (loadingEl) loadingEl.classList.add('hidden');
+
+        if (!res.ok || !data.found) {
+            if (notFoundEl) notFoundEl.classList.remove('hidden');
+            if (notFoundText) notFoundText.innerText = data.message || 'Khong tim thay nguoi dung voi email nay.';
+            return;
+        }
+
+        currentSearchedUser = data;
+        renderFriendResultCard(data);
+    } catch (err) {
+        if (loadingEl) loadingEl.classList.add('hidden');
+        if (notFoundEl) notFoundEl.classList.remove('hidden');
+        if (notFoundText) notFoundText.innerText = 'Loi ket noi den may chu, vui long thu lai.';
+    }
+}
+
+function renderFriendResultCard(data) {
+    const userCardEl = document.getElementById('add-friend-user-card');
+    const avatarEl = document.getElementById('add-friend-card-avatar');
+    const nameEl = document.getElementById('add-friend-card-name');
+    const emailEl = document.getElementById('add-friend-card-email');
+    const badgeContainer = document.getElementById('add-friend-card-badge-container');
+    const actionContainer = document.getElementById('add-friend-card-action-container');
+
+    if (!userCardEl) return;
+
+    const user = data.user;
+    const rel = data.relationship;
+
+    if (nameEl) nameEl.innerText = user.name;
+    if (emailEl) emailEl.innerText = user.email;
+
+    if (avatarEl) {
+        if (user.avatar) {
+            avatarEl.innerHTML = `<img src="${user.avatar}" class="w-full h-full object-cover rounded-2xl" alt="${user.name}">`;
+        } else {
+            const firstLetter = (user.name && user.name.length > 0) ? user.name.charAt(0).toUpperCase() : 'U';
+            avatarEl.innerText = firstLetter;
+        }
+    }
+
+    let badgeHtml = '';
+    let actionHtml = '';
+
+    if (rel.status === 'self') {
+        badgeHtml = `
+            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 text-xs font-semibold">
+                <i data-lucide="user-check" class="w-4 h-4 text-sky-500"></i>
+                <span>Day la tai khoan cua ban</span>
+            </div>
+        `;
+        actionHtml = '';
+    } else if (rel.status === 'friend') {
+        badgeHtml = `
+            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 text-xs font-semibold">
+                <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                <span>Da la ban be</span>
+            </div>
+        `;
+        const directConvId = rel.conversation_id;
+        if (directConvId) {
+            actionHtml = `
+                <a href="/app/c/${directConvId}" class="w-full py-2.5 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="message-circle" class="w-4 h-4"></i>
+                    <span>Nhan tin ngay</span>
+                </a>
+            `;
+        }
+    } else if (rel.status === 'pending_sent') {
+        badgeHtml = `
+            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60 text-xs font-semibold">
+                <i data-lucide="clock" class="w-4 h-4"></i>
+                <span>Da gui loi moi ket ban (Dang cho phan hoi)</span>
+            </div>
+        `;
+        actionHtml = `
+            <button type="button" disabled class="w-full py-2.5 px-4 bg-slate-100 dark:bg-slate-700 text-slate-400 rounded-xl font-bold text-xs cursor-not-allowed flex items-center justify-center gap-2">
+                <i data-lucide="clock" class="w-4 h-4"></i>
+                <span>Cho doi phuong dong y</span>
+            </button>
+        `;
+    } else if (rel.status === 'pending_received') {
+        badgeHtml = `
+            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60 text-xs font-semibold">
+                <i data-lucide="user-plus" class="w-4 h-4"></i>
+                <span>Nguoi nay da gui loi moi ket ban cho ban</span>
+            </div>
+        `;
+        actionHtml = `
+            <button type="button" onclick="acceptFriendFromModal(${rel.friendship_id})" id="btn-accept-friend-modal" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2">
+                <i data-lucide="check" class="w-4 h-4"></i>
+                <span>Chap nhan loi moi</span>
+            </button>
+        `;
+    } else if (rel.status === 'blocked') {
+        badgeHtml = `
+            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/60 text-xs font-semibold">
+                <i data-lucide="ban" class="w-4 h-4"></i>
+                <span>Khong the ket ban voi nguoi dung nay</span>
+            </div>
+        `;
+        actionHtml = '';
+    } else {
+        badgeHtml = `
+            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800/60 text-xs font-semibold">
+                <i data-lucide="user" class="w-4 h-4"></i>
+                <span>Chua ket ban</span>
+            </div>
+        `;
+        actionHtml = `
+            <button type="button" onclick="submitFriendRequest(${user.id})" id="btn-send-friend-modal" class="w-full py-2.5 px-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold text-xs shadow-md shadow-sky-500/20 transition-all flex items-center justify-center gap-2">
+                <i data-lucide="user-plus" class="w-4 h-4"></i>
+                <span id="btn-send-friend-text">Gui loi moi ket ban</span>
+            </button>
+        `;
+    }
+
+    if (badgeContainer) badgeContainer.innerHTML = badgeHtml;
+    if (actionContainer) actionContainer.innerHTML = actionHtml;
+
+    userCardEl.classList.remove('hidden');
+
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+    }
+}
+
+async function submitFriendRequest(friendId) {
+    const btn = document.getElementById('btn-send-friend-modal');
+    const btnText = document.getElementById('btn-send-friend-text');
+    const msgEl = document.getElementById('add-friend-msg');
+
+    if (btn) {
+        btn.disabled = true;
+        if (btnText) btnText.innerText = 'Dang gui loi moi...';
     }
 
     try {
@@ -29,39 +231,250 @@ async function sendFriendRequest() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Accept': 'application/json',
                 'X-CSRF-TOKEN': '{{ csrf_token() }}'
             },
-            body: JSON.stringify({ email: email })
+            body: JSON.stringify({ friend_id: friendId })
         });
 
         const data = await res.json();
 
-        if (res.ok) {
-            msgEl.innerText = 'Gửi kết bạn thành công!';
-            msgEl.className = 'text-xs mt-2 text-emerald-500 block';
-            document.getElementById('add-friend-email').value = '';
-            Toastify({text: "Đã gửi yêu cầu kết bạn!", style: {background: "#10b981"}}).showToast();
-            setTimeout(() => closeModal('modal-add-friend'), 1500);
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: 'Da gui loi moi ket ban!', style: { background: '#10b981' } }).showToast();
+            }
+            if (currentSearchedUser) {
+                currentSearchedUser.relationship.status = 'pending_sent';
+                renderFriendResultCard(currentSearchedUser);
+            }
         } else {
-            msgEl.innerText = data.message || 'Lỗi gửi yêu cầu';
-            msgEl.className = 'text-xs mt-2 text-rose-500 block';
+            if (msgEl) {
+                msgEl.innerText = data.message || 'Loi khi gui loi moi.';
+                msgEl.className = 'text-xs text-center text-rose-500 block';
+            }
+            if (btn) {
+                btn.disabled = false;
+                if (btnText) btnText.innerText = 'Gui loi moi ket ban';
+            }
         }
     } catch (err) {
-        msgEl.innerText = 'Lỗi kết nối mạng';
-        msgEl.className = 'text-xs mt-2 text-rose-500 block';
+        if (msgEl) {
+            msgEl.innerText = 'Loi ket noi toi may chu.';
+            msgEl.className = 'text-xs text-center text-rose-500 block';
+        }
+        if (btn) {
+            btn.disabled = false;
+            if (btnText) btnText.innerText = 'Gui loi moi ket ban';
+        }
     }
 }
 
-async function createGroup() {
-    const name = document.getElementById('group-name').value;
-    const memberCheckboxes = document.querySelectorAll('input[name="group_members[]"]:checked');
-    const userIds = Array.from(memberCheckboxes).map(cb => cb.value);
+async function acceptFriendFromModal(friendshipId) {
+    const btn = document.getElementById('btn-accept-friend-modal');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Dang chap nhan...';
+    }
+
+    try {
+        const res = await fetch(`/app/friend/accept/${friendshipId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            }
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: 'Da chap nhan ket ban thanh cong!', style: { background: '#10b981' } }).showToast();
+            }
+            setTimeout(() => {
+                if (data.redirect_url) {
+                    window.location.href = data.redirect_url;
+                } else {
+                    window.location.reload();
+                }
+            }, 600);
+        } else {
+            alert(data.message || 'Khong the chap nhan loi moi.');
+            if (btn) btn.disabled = false;
+        }
+    } catch (err) {
+        alert('Loi ket noi khi chap nhan loi moi.');
+        if (btn) btn.disabled = false;
+    }
+}
+
+// ---------------------------------------------------------
+// LOGIC MODAL: TAO NHOM HOC TAP (CREATE GROUP)
+// ---------------------------------------------------------
+const selectedGroupMembers = new Map();
+
+function resetCreateGroupModal() {
+    const nameInput = document.getElementById('group-name-input');
+    const filterInput = document.getElementById('group-filter-input');
     const msgEl = document.getElementById('create-group-msg');
 
-    if (!name) {
-        msgEl.innerText = 'Vui lòng nhập tên nhóm!';
-        msgEl.className = 'text-xs mt-2 text-rose-500 block';
+    if (nameInput) nameInput.value = '';
+    if (filterInput) filterInput.value = '';
+    if (msgEl) {
+        msgEl.classList.add('hidden');
+        msgEl.innerText = '';
+    }
+
+    selectedGroupMembers.clear();
+
+    document.querySelectorAll('.group-member-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
+
+    filterGroupFriendsList('');
+    renderSelectedGroupChips();
+}
+
+function filterGroupFriendsList(query) {
+    const normalized = query.trim().toLowerCase();
+    const rows = document.querySelectorAll('.group-friend-row');
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+        const name = (row.getAttribute('data-name') || '').toLowerCase();
+        const email = (row.getAttribute('data-email') || '').toLowerCase();
+
+        if (!normalized || name.includes(normalized) || email.includes(normalized)) {
+            row.classList.remove('hidden');
+            visibleCount++;
+        } else {
+            row.classList.add('hidden');
+        }
+    });
+
+    const emptySearchMsg = document.getElementById('group-friends-search-empty');
+    if (emptySearchMsg) {
+        if (visibleCount === 0 && rows.length > 0) {
+            emptySearchMsg.classList.remove('hidden');
+        } else {
+            emptySearchMsg.classList.add('hidden');
+        }
+    }
+}
+
+function toggleGroupMemberSelection(id, name, avatar) {
+    const numericId = parseInt(id, 10);
+    if (selectedGroupMembers.has(numericId)) {
+        selectedGroupMembers.delete(numericId);
+    } else {
+        selectedGroupMembers.set(numericId, { id: numericId, name: name, avatar: avatar });
+    }
+
+    const checkbox = document.getElementById('group-checkbox-' + numericId);
+    if (checkbox) {
+        checkbox.checked = selectedGroupMembers.has(numericId);
+    }
+
+    renderSelectedGroupChips();
+}
+
+function removeGroupMemberSelection(id) {
+    const numericId = parseInt(id, 10);
+    selectedGroupMembers.delete(numericId);
+
+    const checkbox = document.getElementById('group-checkbox-' + numericId);
+    if (checkbox) {
+        checkbox.checked = false;
+    }
+
+    renderSelectedGroupChips();
+}
+
+function renderSelectedGroupChips() {
+    const chipsContainer = document.getElementById('group-selected-chips-container');
+    const badgeEl = document.getElementById('group-selected-count-badge');
+    if (!chipsContainer || !badgeEl) return;
+
+    const count = selectedGroupMembers.size;
+    badgeEl.innerText = `${count} thanh vien (Toi thieu 2)`;
+
+    if (count >= 2) {
+        badgeEl.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300';
+    } else {
+        badgeEl.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300';
+    }
+
+    if (count === 0) {
+        chipsContainer.innerHTML = `
+            <span id="group-selected-empty-text" class="text-xs text-slate-400 italic px-1 select-none">
+                Chua chon thanh vien nao...
+            </span>
+        `;
         return;
+    }
+
+    let chipsHtml = '';
+    selectedGroupMembers.forEach(member => {
+        const firstLetter = (member.name && member.name.length > 0) ? member.name.charAt(0).toUpperCase() : 'U';
+        chipsHtml += `
+            <div class="inline-flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 rounded-xl px-2.5 py-1 text-xs shadow-xs animate-in fade-in duration-200">
+                <div class="w-4 h-4 rounded-full bg-indigo-200 dark:bg-indigo-700 text-indigo-800 dark:text-indigo-100 flex items-center justify-center text-[9px] font-bold">
+                    ${firstLetter}
+                </div>
+                <span class="font-bold max-w-[100px] truncate">${member.name}</span>
+                <button type="button" onclick="event.stopPropagation(); removeGroupMemberSelection(${member.id})" 
+                        class="text-indigo-400 hover:text-rose-500 rounded-md transition-colors p-0.5">
+                    <i data-lucide="x" class="w-3 h-3"></i>
+                </button>
+            </div>
+        `;
+    });
+
+    chipsContainer.innerHTML = chipsHtml;
+
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+    }
+}
+
+async function submitCreateGroup() {
+    const nameInput = document.getElementById('group-name-input');
+    const msgEl = document.getElementById('create-group-msg');
+    const btn = document.getElementById('btn-create-group-submit');
+    const btnText = document.getElementById('btn-create-group-text');
+
+    const title = nameInput ? nameInput.value.trim() : '';
+    const participantIds = Array.from(selectedGroupMembers.keys());
+
+    if (!title) {
+        if (msgEl) {
+            msgEl.innerText = 'Vui long nhap ten nhom hoc tap.';
+            msgEl.className = 'text-xs mt-2 text-rose-500 block text-center';
+        }
+        if (nameInput) nameInput.focus();
+        return;
+    }
+
+    if (title.length < 2) {
+        if (msgEl) {
+            msgEl.innerText = 'Ten nhom hoc tap phai co it nhat 2 ky tu.';
+            msgEl.className = 'text-xs mt-2 text-rose-500 block text-center';
+        }
+        if (nameInput) nameInput.focus();
+        return;
+    }
+
+    if (participantIds.length < 2) {
+        if (msgEl) {
+            msgEl.innerText = 'Vui long chon toi thieu 2 ban be de tao nhom hoc tap.';
+            msgEl.className = 'text-xs mt-2 text-rose-500 block text-center';
+        }
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        if (btnText) btnText.innerText = 'Dang tao nhom...';
     }
 
     try {
@@ -69,35 +482,64 @@ async function createGroup() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Accept': 'application/json',
                 'X-CSRF-TOKEN': '{{ csrf_token() }}'
             },
-            body: JSON.stringify({ name: name, members: userIds })
+            body: JSON.stringify({
+                title: title,
+                participant_ids: participantIds
+            })
         });
 
         const data = await res.json();
 
-        if (res.ok) {
-            msgEl.innerText = 'Tạo nhóm thành công!';
-            msgEl.className = 'text-xs mt-2 text-emerald-500 block';
-            Toastify({text: "Đã tạo nhóm thành công!", style: {background: "#10b981"}}).showToast();
+        if (res.ok && data.success) {
+            if (msgEl) {
+                msgEl.innerText = 'Tao nhom hoc tap thanh cong!';
+                msgEl.className = 'text-xs mt-2 text-emerald-500 block text-center';
+            }
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: 'Da tao nhom hoc tap thanh cong!', style: { background: '#10b981' } }).showToast();
+            }
             setTimeout(() => {
                 closeModal('modal-create-group');
-                window.location.href = `/app/c/${data.id}`;
-            }, 1000);
+                if (data.redirect_url) {
+                    window.location.href = data.redirect_url;
+                } else if (data.conversation_id) {
+                    window.location.href = `/app/c/${data.conversation_id}`;
+                }
+            }, 800);
         } else {
-            msgEl.innerText = data.message || 'Lỗi tạo nhóm';
-            msgEl.className = 'text-xs mt-2 text-rose-500 block';
+            if (msgEl) {
+                msgEl.innerText = data.message || 'Loi khi tao nhom chat.';
+                msgEl.className = 'text-xs mt-2 text-rose-500 block text-center';
+            }
+            if (btn) {
+                btn.disabled = false;
+                if (btnText) btnText.innerText = 'Tao Nhom';
+            }
         }
     } catch (err) {
-        msgEl.innerText = 'Lỗi kết nối mạng';
-        msgEl.className = 'text-xs mt-2 text-rose-500 block';
+        if (msgEl) {
+            msgEl.innerText = 'Loi ket noi toi may chu khi tao nhom.';
+            msgEl.className = 'text-xs mt-2 text-rose-500 block text-center';
+        }
+        if (btn) {
+            btn.disabled = false;
+            if (btnText) btnText.innerText = 'Tao Nhom';
+        }
     }
 }
+
+// Giu alias de tuong thich nguoc neu co cho khac goi
+const sendFriendRequest = submitFriendRequest;
+const createGroup = submitCreateGroup;
 
 @if(isset($activeConversation))
     let isLoadingOlderMessages = false;
     let hasMoreOlderMessages = true;
     let oldestMessageId = 0;
+    let selectedDocumentFile = null;
 
     function formatAudioTime(seconds) {
         if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
@@ -122,6 +564,36 @@ async function createGroup() {
             }
         }
 
+        if (message.type === 'recalled') {
+            return `
+                <div id="msg-${message.id}" class="flex ${isMine ? 'justify-end' : 'justify-start'}">
+                    <div class="flex gap-2 max-w-[75%] ${isMine ? 'flex-row-reverse' : 'flex-row'}">
+                        ${!isMine ? `
+                            <div class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 shrink-0 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 mt-1">
+                                ${avatarChar}
+                            </div>
+                        ` : ''}
+                        <div>
+                            ${!isMine ? `
+                                <div class="flex items-baseline gap-2 mb-1 ml-1">
+                                    <span class="text-xs font-bold text-slate-700 dark:text-slate-300">${message.user ? message.user.name : ''}</span>
+                                    <span class="text-[10px] text-slate-400">${timeStr}</span>
+                                </div>
+                            ` : `
+                                <div class="flex items-baseline gap-2 mb-1 mr-1 justify-end">
+                                    <span class="text-[10px] text-slate-400">${timeStr}</span>
+                                </div>
+                            `}
+                            <div class="border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-400 dark:text-slate-500 italic px-3.5 py-2 rounded-2xl text-xs max-w-md flex items-center gap-1.5 select-none">
+                                <i data-lucide="ban" class="w-3.5 h-3.5 shrink-0 opacity-70"></i>
+                                <span>Tin nhắn đã được thu hồi</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         let innerContent = '';
         if (message.reply_to) {
             let replyText = message.reply_to.body;
@@ -137,6 +609,8 @@ async function createGroup() {
                 replyText = '[Oẳn tù tì]';
             } else if (message.reply_to.type === 'event') {
                 replyText = '[Lịch hẹn]: ' + (message.reply_to.body || '');
+            } else if (message.reply_to.type === 'document') {
+                replyText = '[Tài liệu]: ' + ((message.reply_to.metadata && message.reply_to.metadata.file_name) || message.reply_to.body || '');
             }
             innerContent += `
                 <div onclick="scrollToMessage(${message.reply_to_id})" class="cursor-pointer hover:opacity-100 transition-all mb-2 p-2 rounded-xl ${isMine ? 'bg-black/10' : 'bg-black/5 dark:bg-white/5'} border-l-2 ${isMine ? 'border-white/50' : 'border-sky-500'} text-[11px] opacity-80">
@@ -229,6 +703,8 @@ async function createGroup() {
             innerContent += renderRpsCardHtml(message, isMine);
         } else if (message.type === 'event') {
             innerContent += renderEventCardHtml(message, isMine);
+        } else if (message.type === 'document') {
+            innerContent += renderDocumentCardHtml(message, isMine);
         } else {
             innerContent += (message.body || '').replace(/\n/g, "<br>");
         }
@@ -246,6 +722,8 @@ async function createGroup() {
             replyTooltip = '[Oẳn tù tì]';
         } else if (message.type === 'event') {
             replyTooltip = '[Lịch hẹn]: ' + (message.body || '');
+        } else if (message.type === 'document') {
+            replyTooltip = '[Tài liệu]: ' + ((message.metadata && message.metadata.file_name) || message.body || '');
         }
 
         return `
@@ -297,15 +775,29 @@ async function createGroup() {
                                 <button type="button" onclick="prepareReply(${message.id}, '${(message.user ? message.user.name : '').replace(/'/g, '\\\'')}', '${replyTooltip.replace(/'/g, '\\\'').replace(/\r\n|\n|\r/g, ' ').substring(0, 50)}')" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm flex items-center justify-center transition-colors" title="Trả lời">
                                     <i data-lucide="reply" class="w-3.5 h-3.5"></i>
                                 </button>
+                                <button type="button" onclick="openForwardModal(${message.id})" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-indigo-500 shadow-sm flex items-center justify-center transition-colors" title="Chuyển tiếp">
+                                    <i data-lucide="forward" class="w-3.5 h-3.5"></i>
+                                </button>
                                 <button type="button" onclick="togglePinMessage(${message.id})" id="btn-pin-${message.id}" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-500 shadow-sm flex items-center justify-center transition-colors" title="${message.is_pinned ? 'Bỏ ghim' : 'Ghim tin nhắn'}">
                                     <i data-lucide="pin" class="w-3.5 h-3.5 ${message.is_pinned ? 'text-amber-500 fill-amber-500' : ''}"></i>
                                 </button>
+                                ${isMine ? `
+                                    <button type="button" onclick="confirmUnsendMessage(${message.id})" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-500 shadow-sm flex items-center justify-center transition-colors" title="Gỡ tin nhắn">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                ` : ''}
                             </div>
                             <!-- Huy hieu Da ghim -->
                             <div id="pin-badge-${message.id}" class="${message.is_pinned ? 'flex' : 'hidden'} items-center gap-1 text-[10px] ${isMine ? 'text-amber-200' : 'text-amber-500 dark:text-amber-400'} font-bold mb-1.5 pb-1 border-b ${isMine ? 'border-white/20' : 'border-slate-200/60 dark:border-slate-700/60'}">
                                 <i data-lucide="pin" class="w-3 h-3 fill-current"></i>
                                 <span>Đã ghim</span>
                             </div>
+                            ${(message.metadata && message.metadata.is_forwarded) ? `
+                                <div class="flex items-center gap-1 text-[10px] ${isMine ? 'text-sky-100' : 'text-slate-400 dark:text-slate-400'} font-medium italic mb-1.5 pb-1 border-b ${isMine ? 'border-white/20' : 'border-slate-200/60 dark:border-slate-700/60'}">
+                                    <i data-lucide="forward" class="w-3 h-3"></i>
+                                    <span>Đã chuyển tiếp</span>
+                                </div>
+                            ` : ''}
                             ${innerContent}
                             <div id="reactions-bar-${message.id}" class="flex flex-wrap gap-1 mt-1.5 ${isMine ? 'justify-end' : 'justify-start'} hidden"></div>
                         </div>
@@ -466,6 +958,14 @@ async function createGroup() {
         const replyInput = document.getElementById('reply-to-id');
         const text = input.value.trim();
         const replyToId = replyInput.value;
+
+        // Neu co tai lieu dang duoc chon
+        if (selectedDocumentFile) {
+            await submitDocumentPayload(selectedDocumentFile, text, replyToId);
+            input.value = '';
+            cancelReply();
+            return;
+        }
 
         // Neu co anh dang duoc chon
         const fileToSend = selectedImageFile;
@@ -855,6 +1355,427 @@ async function createGroup() {
         scrollToMessage(targetId);
     }
 
+    // Xu ly Dinh kem Tai lieu hoc tap (Document Attachments)
+    function handleDocumentSelected(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (file.size > 25 * 1024 * 1024) {
+            Toastify({ text: "Kích thước tài liệu tối đa 25MB", style: { background: "#f43f5e" } }).showToast();
+            e.target.value = '';
+            return;
+        }
+
+        selectedDocumentFile = file;
+        if (typeof cancelImageSelection === 'function') {
+            cancelImageSelection();
+        }
+
+        const ext = file.name.split('.').pop().toLowerCase();
+        let sizeHuman = '';
+        if (file.size >= 1048576) {
+            sizeHuman = (file.size / 1048576).toFixed(2) + ' MB';
+        } else if (file.size >= 1024) {
+            sizeHuman = (file.size / 1024).toFixed(1) + ' KB';
+        } else {
+            sizeHuman = file.size + ' B';
+        }
+
+        const nameEl = document.getElementById('document-preview-filename');
+        const sizeEl = document.getElementById('document-preview-filesize');
+        const iconEl = document.getElementById('doc-preview-icon');
+        const iconWrap = document.getElementById('doc-preview-icon-wrap');
+
+        if (nameEl) nameEl.innerText = file.name;
+        if (sizeEl) sizeEl.innerText = sizeHuman;
+
+        if (iconWrap && iconEl) {
+            let iconName = 'file-text';
+            let wrapClass = 'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ';
+            if (ext === 'pdf') {
+                iconName = 'file-text';
+                wrapClass += 'bg-rose-500/10 text-rose-500';
+            } else if (['doc', 'docx'].includes(ext)) {
+                iconName = 'file-text';
+                wrapClass += 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800';
+            } else if (['xls', 'xlsx', 'csv', 'tsv'].includes(ext)) {
+                iconName = 'table';
+                wrapClass += 'bg-emerald-500/10 text-emerald-500';
+            } else if (['ppt', 'pptx'].includes(ext)) {
+                iconName = 'presentation';
+                wrapClass += 'bg-amber-500/10 text-amber-500';
+            } else if (['zip', 'rar', '7z'].includes(ext)) {
+                iconName = 'archive';
+                wrapClass += 'bg-orange-500/10 text-orange-500';
+            } else if (['md', 'markdown', 'txt', 'json', 'sql', 'py', 'cpp', 'c', 'java', 'html', 'css', 'js'].includes(ext)) {
+                iconName = 'file-code';
+                wrapClass += 'bg-purple-500/10 text-purple-500';
+            } else {
+                iconName = 'file-text';
+                wrapClass += 'bg-sky-500/10 text-sky-500';
+            }
+            iconWrap.className = wrapClass;
+            iconEl.setAttribute('data-lucide', iconName);
+        }
+
+        const container = document.getElementById('document-preview-container');
+        if (container) {
+            container.classList.remove('hidden');
+            container.classList.add('flex');
+        }
+
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) chatInput.focus();
+        lucide.createIcons();
+    }
+
+    function cancelDocumentSelection() {
+        selectedDocumentFile = null;
+        const input = document.getElementById('document-file-input');
+        if (input) input.value = '';
+        const container = document.getElementById('document-preview-container');
+        if (container) {
+            container.classList.add('hidden');
+            container.classList.remove('flex');
+        }
+    }
+
+    async function submitDocumentPayload(file, caption, replyToId) {
+        const formData = new FormData();
+        formData.append('document', file);
+        if (caption) {
+            formData.append('body', caption);
+        }
+        if (replyToId) {
+            formData.append('reply_to_id', replyToId);
+        }
+
+        const headers = {
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        };
+        if (typeof window.Echo !== 'undefined' && window.Echo.socketId()) {
+            headers['X-Socket-ID'] = window.Echo.socketId();
+        }
+
+        cancelDocumentSelection();
+        cancelReply();
+
+        try {
+            const res = await fetch('{{ route('app.conversation.message.store', $activeConversation?->id ?? 0) }}', {
+                method: 'POST',
+                headers: headers,
+                body: formData
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                appendMessageToChat(data);
+            } else {
+                Toastify({ text: "Lỗi gửi tài liệu", style: { background: "#f43f5e" } }).showToast();
+            }
+        } catch (err) {
+            Toastify({ text: "Lỗi kết nối", style: { background: "#f43f5e" } }).showToast();
+        }
+    }
+
+    function renderDocumentCardHtml(message, isMine) {
+        const meta = message.metadata || {};
+        const fileName = meta.file_name || 'Tài liệu đính kèm';
+        const ext = (meta.file_extension || fileName.split('.').pop() || '').toLowerCase();
+        const fileSize = meta.file_size_human || '';
+        const docUrl = message.file_url || (message.file_path ? `/storage/${message.file_path}` : '#');
+        const canPreview = ['pdf', 'md', 'markdown', 'txt', 'csv', 'tsv', 'json', 'sql', 'py', 'cpp', 'c', 'java', 'html', 'css', 'js', 'log'].includes(ext);
+
+        let iconName = 'file-text';
+        let iconColor = isMine ? 'text-slate-600' : 'text-sky-500';
+        let iconBg = isMine ? 'bg-white shadow-xs' : 'bg-sky-500/10 dark:bg-sky-500/20';
+
+        if (ext === 'pdf') {
+            iconName = 'file-text';
+            iconColor = isMine ? 'text-rose-600' : 'text-rose-500';
+            iconBg = isMine ? 'bg-white shadow-xs' : 'bg-rose-500/10 dark:bg-rose-500/20';
+        } else if (['doc', 'docx'].includes(ext)) {
+            iconName = 'file-text';
+            iconColor = isMine ? 'text-blue-600' : 'text-blue-600 dark:text-blue-400';
+            iconBg = isMine ? 'bg-white shadow-xs' : 'bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/40';
+        } else if (['xls', 'xlsx', 'csv', 'tsv'].includes(ext)) {
+            iconName = 'table';
+            iconColor = isMine ? 'text-emerald-600' : 'text-emerald-500';
+            iconBg = isMine ? 'bg-white shadow-xs' : 'bg-emerald-500/10 dark:bg-emerald-500/20';
+        } else if (['ppt', 'pptx'].includes(ext)) {
+            iconName = 'presentation';
+            iconColor = isMine ? 'text-amber-600' : 'text-amber-500';
+            iconBg = isMine ? 'bg-white shadow-xs' : 'bg-amber-500/10 dark:bg-amber-500/20';
+        } else if (['zip', 'rar', '7z'].includes(ext)) {
+            iconName = 'archive';
+            iconColor = isMine ? 'text-orange-600' : 'text-orange-500';
+            iconBg = isMine ? 'bg-white shadow-xs' : 'bg-orange-500/10 dark:bg-orange-500/20';
+        } else if (['md', 'markdown', 'txt', 'json', 'sql', 'py', 'cpp', 'c', 'java', 'html', 'css', 'js', 'log'].includes(ext)) {
+            iconName = 'file-code';
+            iconColor = isMine ? 'text-purple-600' : 'text-purple-500';
+            iconBg = isMine ? 'bg-white shadow-xs' : 'bg-purple-500/10 dark:bg-purple-500/20';
+        }
+
+        const safeFileName = escapeHtmlText(fileName);
+        const safeDocUrl = encodeURI(docUrl);
+        const previewBtn = canPreview ? `
+            <button type="button" onclick="openDocumentViewer('${safeDocUrl}', '${safeFileName}', '${ext}')" class="flex-1 py-1.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${isMine ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-sky-500 hover:bg-sky-600 text-white shadow-xs'}">
+                <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                <span>Xem trực tiếp</span>
+            </button>
+        ` : '';
+
+        const downloadBtnClass = canPreview ? 'px-3 py-1.5' : 'flex-1 py-1.5 px-3';
+        const downloadBtnText = canPreview ? 'Tải' : 'Tải tài liệu';
+
+        return `
+            <div class="flex flex-col gap-2 min-w-[240px] sm:min-w-[280px]">
+                <div class="flex items-center gap-3 p-3 rounded-2xl ${isMine ? 'bg-black/10 border border-white/20' : 'bg-black/5 dark:bg-white/5 border border-slate-200 dark:border-slate-700/60'} transition-all">
+                    <div class="w-11 h-11 rounded-xl ${iconBg} ${iconColor} flex items-center justify-center shrink-0 shadow-xs">
+                        <i data-lucide="${iconName}" class="w-6 h-6"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <h4 class="font-bold text-xs ${isMine ? 'text-white' : 'text-slate-800 dark:text-slate-100'} truncate" title="${safeFileName}">
+                            ${safeFileName}
+                        </h4>
+                        <div class="flex items-center gap-2 text-[10px] ${isMine ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'} mt-0.5">
+                            <span class="font-medium uppercase">${ext}</span>
+                            ${fileSize ? `<span>•</span><span>${fileSize}</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 pt-0.5">
+                    ${previewBtn}
+                    <a href="${safeDocUrl}" download="${safeFileName}" class="${downloadBtnClass} rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${isMine ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200'}" title="Tải tài liệu về máy">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                        <span>${downloadBtnText}</span>
+                    </a>
+                </div>
+                ${message.body ? `<p class="text-xs pt-1 opacity-90 ${isMine ? 'text-white' : 'text-slate-800 dark:text-slate-200'}">${escapeHtmlText(message.body).replace(/\n/g, '<br>')}</p>` : ''}
+            </div>
+        `;
+    }
+
+    // TRINH XEM TAI LIEU TRUC TIEP (IN-APP DOCUMENT VIEWER)
+    function openDocumentViewer(url, fileName, ext) {
+        const modal = document.getElementById('modal-document-viewer');
+        if (!modal) return;
+
+        const filenameEl = document.getElementById('doc-viewer-filename');
+        const badgeEl = document.getElementById('doc-viewer-ext-badge');
+        const iconEl = document.getElementById('doc-viewer-header-icon');
+        const iconWrap = document.getElementById('doc-viewer-badge-icon');
+        const downloadBtn = document.getElementById('doc-viewer-download-btn');
+        const fallbackDownload = document.getElementById('doc-viewer-fallback-download');
+
+        if (filenameEl) filenameEl.innerText = fileName;
+        if (badgeEl) badgeEl.innerText = (ext || 'FILE').toUpperCase();
+        if (downloadBtn) {
+            downloadBtn.href = url;
+            downloadBtn.setAttribute('download', fileName);
+        }
+        if (fallbackDownload) {
+            fallbackDownload.href = url;
+            fallbackDownload.setAttribute('download', fileName);
+        }
+
+        let iconName = 'file-text';
+        let wrapClass = 'w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ';
+        if (ext === 'pdf') {
+            iconName = 'file-text';
+            wrapClass += 'bg-rose-500/10 text-rose-500';
+        } else if (['xls', 'xlsx', 'csv', 'tsv'].includes(ext)) {
+            iconName = 'table';
+            wrapClass += 'bg-emerald-500/10 text-emerald-500';
+        } else if (['md', 'markdown', 'txt', 'json', 'sql', 'py', 'cpp', 'c', 'java', 'html', 'css', 'js', 'log'].includes(ext)) {
+            iconName = 'file-code';
+            wrapClass += 'bg-purple-500/10 text-purple-500';
+        } else {
+            iconName = 'file-text';
+            wrapClass += 'bg-sky-500/10 text-sky-500';
+        }
+        if (iconWrap) iconWrap.className = wrapClass;
+        if (iconEl) iconEl.setAttribute('data-lucide', iconName);
+
+        const loadingEl = document.getElementById('doc-viewer-loading');
+        const pdfFrame = document.getElementById('doc-viewer-pdf-frame');
+        const mdWrap = document.getElementById('doc-viewer-markdown-wrap');
+        const codeWrap = document.getElementById('doc-viewer-code-wrap');
+        const tableWrap = document.getElementById('doc-viewer-table-wrap');
+        const errorEl = document.getElementById('doc-viewer-error');
+
+        if (loadingEl) loadingEl.classList.remove('hidden');
+        if (pdfFrame) {
+            pdfFrame.classList.add('hidden');
+            pdfFrame.src = '';
+        }
+        if (mdWrap) mdWrap.classList.add('hidden');
+        if (codeWrap) codeWrap.classList.add('hidden');
+        if (tableWrap) tableWrap.classList.add('hidden');
+        if (errorEl) errorEl.classList.add('hidden');
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        lucide.createIcons();
+
+        if (ext === 'pdf') {
+            if (pdfFrame) {
+                pdfFrame.onload = () => {
+                    if (loadingEl) loadingEl.classList.add('hidden');
+                    pdfFrame.classList.remove('hidden');
+                };
+                pdfFrame.onerror = () => {
+                    if (loadingEl) loadingEl.classList.add('hidden');
+                    if (errorEl) errorEl.classList.remove('hidden');
+                };
+                pdfFrame.src = url;
+            }
+            return;
+        }
+
+        fetch(url)
+            .then(res => {
+                if (!res.ok) throw new Error('Network error');
+                return res.text();
+            })
+            .then(content => {
+                if (loadingEl) loadingEl.classList.add('hidden');
+
+                if (ext === 'md' || ext === 'markdown') {
+                    const mdContainer = document.getElementById('doc-viewer-markdown-content');
+                    if (mdContainer && mdWrap) {
+                        mdContainer.innerHTML = renderMarkdownToHtml(content);
+                        mdWrap.classList.remove('hidden');
+                    }
+                } else if (ext === 'csv' || ext === 'tsv') {
+                    const tableContainer = document.getElementById('doc-viewer-table-content');
+                    if (tableContainer && tableWrap) {
+                        tableContainer.innerHTML = renderCsvToTable(content, ext === 'tsv' ? '\t' : ',');
+                        tableWrap.classList.remove('hidden');
+                    }
+                } else {
+                    const codeEl = document.getElementById('doc-viewer-code-content');
+                    const langEl = document.getElementById('doc-viewer-code-lang');
+                    const linesEl = document.getElementById('doc-viewer-code-lines');
+                    if (codeEl && codeWrap) {
+                        codeEl.textContent = content;
+                        const lineCount = content.split('\n').length;
+                        if (langEl) langEl.innerText = ext.toUpperCase();
+                        if (linesEl) linesEl.innerText = lineCount + ' dòng';
+                        codeWrap.classList.remove('hidden');
+                    }
+                }
+                lucide.createIcons();
+            })
+            .catch(() => {
+                if (loadingEl) loadingEl.classList.add('hidden');
+                if (errorEl) errorEl.classList.remove('hidden');
+                lucide.createIcons();
+            });
+    }
+
+    function closeDocumentViewer() {
+        const modal = document.getElementById('modal-document-viewer');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            const pdfFrame = document.getElementById('doc-viewer-pdf-frame');
+            if (pdfFrame) pdfFrame.src = '';
+        }
+    }
+
+    function toggleDocViewerFullscreen() {
+        const container = document.getElementById('doc-viewer-container');
+        const icon = document.getElementById('doc-viewer-fs-icon');
+        if (!container) return;
+
+        const isFullscreen = container.classList.contains('w-screen');
+        if (isFullscreen) {
+            container.className = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl flex flex-col w-full max-w-5xl h-[88vh] overflow-hidden transition-all duration-200';
+            if (icon) icon.setAttribute('data-lucide', 'maximize');
+        } else {
+            container.className = 'bg-white dark:bg-slate-900 border-0 rounded-none shadow-none flex flex-col w-screen h-screen max-w-none overflow-hidden transition-all duration-200';
+            if (icon) icon.setAttribute('data-lucide', 'minimize');
+        }
+        lucide.createIcons();
+    }
+
+    function renderMarkdownToHtml(md) {
+        if (!md) return '';
+        let html = '';
+        const lines = md.split('\n');
+        let inList = false;
+
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i];
+
+            if (line.startsWith('# ')) {
+                if (inList) { html += '</ul>'; inList = false; }
+                html += `<h1 class="text-xl font-black text-slate-900 dark:text-white pb-2 border-b border-slate-200 dark:border-slate-800">${parseInlineMarkdown(line.slice(2))}</h1>`;
+            } else if (line.startsWith('## ')) {
+                if (inList) { html += '</ul>'; inList = false; }
+                html += `<h2 class="text-lg font-extrabold text-slate-900 dark:text-white pt-2">${parseInlineMarkdown(line.slice(3))}</h2>`;
+            } else if (line.startsWith('### ')) {
+                if (inList) { html += '</ul>'; inList = false; }
+                html += `<h3 class="text-base font-bold text-slate-800 dark:text-slate-100">${parseInlineMarkdown(line.slice(4))}</h3>`;
+            } else if (line.startsWith('> ')) {
+                if (inList) { html += '</ul>'; inList = false; }
+                html += `<blockquote class="p-3 my-2 border-l-4 border-sky-500 bg-sky-50 dark:bg-sky-950/40 rounded-r-xl italic text-slate-700 dark:text-slate-300 text-xs">${parseInlineMarkdown(line.slice(2))}</blockquote>`;
+            } else if (line.startsWith('- ') || line.startsWith('* ')) {
+                if (!inList) {
+                    html += '<ul class="list-disc pl-5 space-y-1 text-slate-700 dark:text-slate-300">';
+                    inList = true;
+                }
+                html += `<li>${parseInlineMarkdown(line.slice(2))}</li>`;
+            } else if (line.trim() === '') {
+                if (inList) { html += '</ul>'; inList = false; }
+                html += '<div class="h-2"></div>';
+            } else {
+                if (inList) { html += '</ul>'; inList = false; }
+                html += `<p class="text-slate-700 dark:text-slate-300 leading-relaxed">${parseInlineMarkdown(line)}</p>`;
+            }
+        }
+        if (inList) html += '</ul>';
+        return html;
+    }
+
+    function parseInlineMarkdown(text) {
+        if (!text) return '';
+        let escaped = escapeHtmlText(text);
+        escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-slate-900 dark:text-white">$1</strong>');
+        escaped = escaped.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
+        escaped = escaped.replace(/`(.*?)`/g, '<code class="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-mono text-xs text-sky-600 dark:text-sky-400">$1</code>');
+        return escaped;
+    }
+
+    function renderCsvToTable(csv, delimiter = ',') {
+        if (!csv) return '';
+        const lines = csv.trim().split('\n');
+        if (lines.length === 0) return '';
+
+        let tableHtml = '<thead class="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 uppercase font-bold sticky top-0">';
+        const headers = lines[0].split(delimiter);
+        tableHtml += '<tr>';
+        headers.forEach(h => {
+            tableHtml += `<th class="px-4 py-2.5 border border-slate-200 dark:border-slate-700 whitespace-nowrap">${escapeHtmlText(h.trim())}</th>`;
+        });
+        tableHtml += '</tr></thead><tbody class="divide-y divide-slate-200 dark:divide-slate-800">';
+
+        for (let i = 1; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
+            const cells = lines[i].split(delimiter);
+            const rowBg = i % 2 === 0 ? 'bg-slate-50/50 dark:bg-slate-900/50' : 'bg-white dark:bg-slate-900';
+            tableHtml += `<tr class="${rowBg} hover:bg-sky-50/50 dark:hover:bg-sky-950/30 transition-colors">`;
+            for (let j = 0; j < headers.length; j++) {
+                const val = (cells[j] !== undefined) ? cells[j].trim() : '';
+                tableHtml += `<td class="px-4 py-2 border border-slate-200 dark:border-slate-800 whitespace-nowrap text-slate-700 dark:text-slate-300 font-mono">${escapeHtmlText(val)}</td>`;
+            }
+            tableHtml += '</tr>';
+        }
+        tableHtml += '</tbody>';
+        return tableHtml;
+    }
+
     // Xu ly Lich nhac hen hoc tap (Study Event Reminders)
     function renderEventCardHtml(message, isMine) {
         const meta = message.metadata || {};
@@ -1053,6 +1974,10 @@ async function createGroup() {
                 const meta = data.metadata || {};
                 const participants = meta.participants || {};
                 const hasJoined = !!participants[{{ Auth::id() }}];
+                const banner = document.getElementById('upcoming-reminder-banner');
+                if (banner && parseInt(banner.getAttribute('data-event-id')) === messageId) {
+                    banner.setAttribute('data-joined', hasJoined ? '1' : '0');
+                }
                 Toastify({
                     text: hasJoined ? "Bạn đã xác nhận tham gia buổi học!" : "Bạn đã hủy tham gia buổi học",
                     style: { background: hasJoined ? "#10b981" : "#64748b" }
@@ -1154,8 +2079,8 @@ async function createGroup() {
         if (isNaN(newTarget)) return;
 
         const now = Date.now();
-        // Neu su kien da qua hon 2 tieng thi khong can hien
-        if (newTarget < now - 2 * 3600 * 1000) return;
+        // Neu su kien da qua thoi gian bat dau thi khong lam banner sap toi nua
+        if (newTarget <= now) return;
 
         const currentEventId = parseInt(banner.getAttribute('data-event-id')) || 0;
         const currentRemindAtStr = banner.getAttribute('data-remind-at');
@@ -1176,6 +2101,10 @@ async function createGroup() {
             banner.setAttribute('data-remind-at', newRemindAtStr);
             banner.setAttribute('data-remind-before', meta.remind_before || 15);
             banner.setAttribute('data-location', meta.location || '');
+
+            const participants = meta.participants || {};
+            const isJoined = (message.user_id === {{ Auth::id() }}) || !!participants[{{ Auth::id() }}];
+            banner.setAttribute('data-joined', isJoined ? '1' : '0');
 
             const titleEl = document.getElementById('reminder-banner-title');
             if (titleEl) {
@@ -1218,6 +2147,7 @@ async function createGroup() {
         const eventId = banner.getAttribute('data-event-id');
         const remindAtStr = banner.getAttribute('data-remind-at');
         const remindBefore = parseInt(banner.getAttribute('data-remind-before')) || 15;
+        const isJoined = banner.getAttribute('data-joined') === '1';
         const countdownEl = document.getElementById('reminder-banner-countdown');
         const timeEl = document.getElementById('reminder-banner-time');
         const titleEl = document.getElementById('reminder-banner-title');
@@ -1263,9 +2193,9 @@ async function createGroup() {
             countdownEl.innerText = countdownText;
             countdownEl.className = 'font-bold text-amber-600 dark:text-amber-400';
 
-            // Kiem tra nguong bao chuong truoc
+            // Kiem tra nguong bao chuong truoc (chi kich hoat khi nguoi dung co tham gia)
             const thresholdMs = remindBefore * 60 * 1000;
-            if (diff <= thresholdMs) {
+            if (isJoined && diff <= thresholdMs) {
                 const sessionKey = `alerted_event_${eventId}_${remindBefore}`;
                 if (!sessionStorage.getItem(sessionKey)) {
                     sessionStorage.setItem(sessionKey, '1');
@@ -1282,28 +2212,27 @@ async function createGroup() {
                     }).showToast();
                 }
             }
-        } else if (diff > -7200000) {
-            // Dang dien ra (trong vong 2 tieng ke tu gio hen)
-            countdownEl.innerText = 'Đang diễn ra';
-            countdownEl.className = 'font-bold text-emerald-600 dark:text-emerald-400 animate-pulse';
-
-            // Thong bao dung gio bat dau (neu chua bao)
-            const startKey = `started_event_${eventId}`;
-            if (!sessionStorage.getItem(startKey)) {
-                sessionStorage.setItem(startKey, '1');
-                playReminderChime();
-                triggerBrowserNotification(
-                    'Lịch học đang diễn ra!',
-                    `Buổi học "${eventTitle}" đã bắt đầu. Hãy tham gia ngay!`
-                );
-                Toastify({
-                    text: `Buổi học "${eventTitle}" đang diễn ra!`,
-                    duration: 6000,
-                    style: { background: "#10b981" }
-                }).showToast();
-            }
         } else {
-            // Da ket thuc qua 2 tieng -> An banner
+            // Su kien da qua thoi gian bat dau
+            // Chi bao chuong neu nguoi dung dang online truc tiep trong vong 10 giay dau tien
+            if (isJoined && diff <= 0 && diff > -10000) {
+                const startKey = `started_event_${eventId}`;
+                if (!sessionStorage.getItem(startKey)) {
+                    sessionStorage.setItem(startKey, '1');
+                    playReminderChime();
+                    triggerBrowserNotification(
+                        'Lịch học đang diễn ra!',
+                        `Buổi học "${eventTitle}" đã bắt đầu. Hãy tham gia ngay!`
+                    );
+                    Toastify({
+                        text: `Buổi học "${eventTitle}" đang diễn ra!`,
+                        duration: 6000,
+                        style: { background: "#10b981" }
+                    }).showToast();
+                }
+            }
+
+            // An thanh banner nhac hen vi su kien da qua gio bat dau
             banner.classList.add('hidden');
             banner.classList.remove('flex');
         }
@@ -1417,6 +2346,7 @@ async function createGroup() {
             else if (message.type === 'game_dice') previewText = '[Tung xúc xắc]';
             else if (message.type === 'game_rps') previewText = '[Oẳn tù tì]';
             else if (message.type === 'event') previewText = '[Lịch hẹn]: ' + (message.body || '');
+            else if (message.type === 'document') previewText = '[Tài liệu]: ' + ((message.metadata && message.metadata.file_name) || message.body || '');
 
             previewEl.innerText = previewText;
             bar.classList.remove('hidden');
@@ -1431,6 +2361,265 @@ async function createGroup() {
         }
 
         lucide.createIcons();
+    }
+
+    // ===== CHUC NANG CHUYEN TIEP & GO TIN NHAN =====
+    let currentForwardMessageId = null;
+    let selectedForwardConvIds = [];
+
+    function openForwardModal(messageId) {
+        currentForwardMessageId = messageId;
+        selectedForwardConvIds = [];
+
+        const msgEl = document.getElementById('msg-' + messageId);
+        let previewSender = 'Tin nhắn';
+        let previewText = 'Nội dung tin nhắn';
+        let iconName = 'message-square';
+
+        if (msgEl) {
+            const senderEl = msgEl.querySelector('.font-bold.text-slate-700, .font-bold.text-slate-300');
+            if (senderEl) {
+                previewSender = senderEl.innerText.trim();
+            } else {
+                previewSender = 'Bạn';
+            }
+
+            if (msgEl.querySelector('audio')) {
+                iconName = 'mic';
+                previewText = '[Tin nhắn thoại]';
+            } else if (msgEl.querySelector('img')) {
+                iconName = 'image';
+                previewText = '[Hình ảnh]';
+            } else if (msgEl.querySelector('[data-lucide="file-text"], [data-lucide="file"], [data-lucide="file-spreadsheet"]')) {
+                iconName = 'file-text';
+                const docNameEl = msgEl.querySelector('.font-bold.text-xs.truncate');
+                previewText = docNameEl ? `[Tài liệu]: ${docNameEl.innerText.trim()}` : '[Tài liệu]';
+            } else if (msgEl.querySelector('[data-lucide="help-circle"]')) {
+                iconName = 'help-circle';
+                previewText = '[Bài kiểm tra]';
+            } else if (msgEl.querySelector('[data-lucide="box"]')) {
+                iconName = 'box';
+                previewText = '[Tung xúc xắc]';
+            } else if (msgEl.querySelector('[data-lucide="swords"]')) {
+                iconName = 'swords';
+                previewText = '[Thách đấu Oẳn tù tì]';
+            } else if (msgEl.querySelector('[data-lucide="calendar"]')) {
+                iconName = 'calendar';
+                previewText = '[Lịch hẹn học tập]';
+            } else {
+                const bubbleEl = msgEl.querySelector('.max-w-md');
+                if (bubbleEl) {
+                    const textClone = bubbleEl.cloneNode(true);
+                    textClone.querySelectorAll('.group-hover\\:opacity-100, .reaction-picker-wrap, [id^="reactions-bar-"], [id^="pin-badge-"]').forEach(n => n.remove());
+                    previewText = textClone.innerText.trim();
+                }
+            }
+        }
+
+        const senderBox = document.getElementById('forward-preview-sender');
+        const textBox = document.getElementById('forward-preview-text');
+        const iconBox = document.getElementById('forward-preview-icon');
+        const searchInput = document.getElementById('forward-search-input');
+        const errorEl = document.getElementById('forward-message-error');
+
+        if (senderBox) senderBox.innerText = previewSender;
+        if (textBox) textBox.innerText = previewText ? previewText.substring(0, 100) : 'Nội dung tin nhắn';
+        if (iconBox) {
+            iconBox.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4"></i>`;
+        }
+        if (searchInput) searchInput.value = '';
+        if (errorEl) {
+            errorEl.innerText = '';
+            errorEl.classList.add('hidden');
+        }
+
+        document.querySelectorAll('.forward-checkbox').forEach(chk => {
+            chk.checked = false;
+        });
+        document.querySelectorAll('.forward-conv-item').forEach(item => {
+            item.classList.remove('hidden', 'bg-indigo-50', 'dark:bg-indigo-950/30', 'border-indigo-300', 'dark:border-indigo-700');
+        });
+
+        updateForwardSelectedUI();
+        openModal('modal-forward-message');
+        lucide.createIcons();
+    }
+
+    function closeForwardModal() {
+        closeModal('modal-forward-message');
+        currentForwardMessageId = null;
+        selectedForwardConvIds = [];
+    }
+
+    function filterForwardConversations() {
+        const input = document.getElementById('forward-search-input');
+        const q = input ? input.value.toLowerCase().trim() : '';
+        document.querySelectorAll('.forward-conv-item').forEach(item => {
+            const name = item.getAttribute('data-conv-name') || '';
+            if (!q || name.includes(q)) {
+                item.classList.remove('hidden');
+            } else {
+                item.classList.add('hidden');
+            }
+        });
+    }
+
+    function toggleForwardConv(convId) {
+        const chk = document.getElementById('forward-chk-' + convId);
+        const item = document.querySelector(`.forward-conv-item[data-conv-id="${convId}"]`);
+        if (!chk) return;
+
+        const idx = selectedForwardConvIds.indexOf(convId);
+        if (idx > -1) {
+            selectedForwardConvIds.splice(idx, 1);
+            chk.checked = false;
+            if (item) item.classList.remove('bg-indigo-50', 'dark:bg-indigo-950/30', 'border-indigo-300', 'dark:border-indigo-700');
+        } else {
+            selectedForwardConvIds.push(convId);
+            chk.checked = true;
+            if (item) item.classList.add('bg-indigo-50', 'dark:bg-indigo-950/30', 'border-indigo-300', 'dark:border-indigo-700');
+        }
+
+        updateForwardSelectedUI();
+    }
+
+    function updateForwardSelectedUI() {
+        const count = selectedForwardConvIds.length;
+        const countEl = document.getElementById('forward-selected-count');
+        const btn = document.getElementById('btn-submit-forward');
+        const btnText = document.getElementById('forward-btn-text');
+
+        if (countEl) {
+            countEl.innerText = `Đã chọn ${count} cuộc trò chuyện`;
+        }
+        if (btnText) {
+            btnText.innerText = count > 0 ? `Gửi (${count})` : 'Gửi';
+        }
+        if (btn) {
+            btn.disabled = count === 0;
+        }
+    }
+
+    async function submitForwardMessage() {
+        if (!currentForwardMessageId || selectedForwardConvIds.length === 0) return;
+
+        const btn = document.getElementById('btn-submit-forward');
+        const errorEl = document.getElementById('forward-message-error');
+        const originalHtml = btn ? btn.innerHTML : '';
+
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> <span>Đang gửi...</span>';
+            lucide.createIcons();
+        }
+        if (errorEl) {
+            errorEl.innerText = '';
+            errorEl.classList.add('hidden');
+        }
+
+        try {
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            };
+            if (typeof window.Echo !== 'undefined' && window.Echo.socketId()) {
+                headers['X-Socket-ID'] = window.Echo.socketId();
+            }
+
+            const currentConvId = {{ $activeConversation?->id ?? 0 }};
+            const res = await fetch(`{{ url('app/conversation') }}/${currentConvId}/message/${currentForwardMessageId}/forward`, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({
+                    target_conversation_ids: selectedForwardConvIds
+                })
+            });
+
+            const data = await res.json();
+            if (res.ok && data.success) {
+                if (data.messages && Array.isArray(data.messages)) {
+                    data.messages.forEach(msg => {
+                        if (msg.conversation_id === currentConvId) {
+                            appendMessageToChat(msg);
+                        }
+                    });
+                }
+                closeForwardModal();
+                Toastify({
+                    text: `Đã chuyển tiếp tin nhắn đến ${data.forwarded_count} cuộc trò chuyện!`,
+                    duration: 3000,
+                    style: { background: "#6366f1" }
+                }).showToast();
+            } else {
+                const errMsg = data.error || 'Có lỗi xảy ra khi chuyển tiếp tin nhắn';
+                if (errorEl) {
+                    errorEl.innerText = errMsg;
+                    errorEl.classList.remove('hidden');
+                } else {
+                    Toastify({ text: errMsg, style: { background: "#f43f5e" } }).showToast();
+                }
+            }
+        } catch (err) {
+            console.error('Loi forward message:', err);
+            if (errorEl) {
+                errorEl.innerText = 'Lỗi kết nối mạng';
+                errorEl.classList.remove('hidden');
+            } else {
+                Toastify({ text: "Lỗi kết nối", style: { background: "#f43f5e" } }).showToast();
+            }
+        } finally {
+            if (btn) {
+                btn.disabled = selectedForwardConvIds.length === 0;
+                btn.innerHTML = originalHtml;
+                lucide.createIcons();
+            }
+        }
+    }
+
+    async function confirmUnsendMessage(messageId) {
+        if (!confirm("Bạn có chắc chắn muốn thu hồi tin nhắn này đối với tất cả mọi người? Sau khi thu hồi, nội dung sẽ không thể phục hồi.")) {
+            return;
+        }
+
+        try {
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            };
+            if (typeof window.Echo !== 'undefined' && window.Echo.socketId()) {
+                headers['X-Socket-ID'] = window.Echo.socketId();
+            }
+
+            const currentConvId = {{ $activeConversation?->id ?? 0 }};
+            const res = await fetch(`{{ url('app/conversation') }}/${currentConvId}/message/${messageId}/unsend`, {
+                method: 'POST',
+                headers: headers
+            });
+
+            const data = await res.json();
+            if (res.ok && data.success) {
+                updateMessageInChat(data.message);
+                handleMessagePinnedUpdated(data.message);
+                Toastify({
+                    text: "Đã thu hồi tin nhắn thành công!",
+                    duration: 2500,
+                    style: { background: "#10b981" }
+                }).showToast();
+            } else {
+                Toastify({
+                    text: data.error || "Không thể thu hồi tin nhắn",
+                    duration: 3000,
+                    style: { background: "#f43f5e" }
+                }).showToast();
+            }
+        } catch (err) {
+            console.error('Loi unsend message:', err);
+            Toastify({
+                text: "Lỗi kết nối khi thu hồi tin nhắn",
+                duration: 3000,
+                style: { background: "#f43f5e" }
+            }).showToast();
+        }
     }
 
     // Event Listeners (Echo Realtime & Click Outside)

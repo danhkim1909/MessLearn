@@ -15,53 +15,142 @@ class FriendshipController extends Controller
 {
     public function search(Request $request)
     {
-        $email = $request->query('email');
+        $email = trim($request->query('email', ''));
         if (!$email) {
-            return response()->json([]);
+            return response()->json([
+                'found' => false,
+                'message' => 'Vui lòng nhập địa chỉ email cần tìm kiếm.'
+            ], 400);
         }
 
-        $users = User::where('email', 'like', "%{$email}%")
-            ->where('id', '!=', Auth::id())
-            ->limit(5)
-            ->get(['id', 'name', 'email', 'avatar']);
+        $targetUser = User::where('email', $email)->first();
+        if (!$targetUser) {
+            return response()->json([
+                'found' => false,
+                'message' => 'Không tìm thấy người dùng với email này.'
+            ], 404);
+        }
 
-        return response()->json($users);
+        $currentUserId = Auth::id();
+        $isSelf = ($targetUser->id === $currentUserId);
+
+        $status = 'none';
+        $label = 'Chưa kết bạn';
+        $friendshipId = null;
+        $conversationId = null;
+
+        if ($isSelf) {
+            $status = 'self';
+            $label = 'Đây là tài khoản của bạn';
+        } else {
+            $friendship = Friendship::where(function ($query) use ($currentUserId, $targetUser) {
+                $query->where('user_id', $currentUserId)->where('friend_id', $targetUser->id);
+            })->orWhere(function ($query) use ($currentUserId, $targetUser) {
+                $query->where('user_id', $targetUser->id)->where('friend_id', $currentUserId);
+            })->first();
+
+            if ($friendship) {
+                $friendshipId = $friendship->id;
+                if ($friendship->status === 'accepted') {
+                    $status = 'friend';
+                    $label = 'Đã là bạn bè';
+
+                    // Tìm cuộc trò chuyện trực tiếp 1-1 giữa hai người nếu có
+                    $directConv = Conversation::where('type', 'direct')
+                        ->whereHas('participants', function ($q) use ($currentUserId) {
+                            $q->where('user_id', $currentUserId);
+                        })
+                        ->whereHas('participants', function ($q) use ($targetUser) {
+                            $q->where('user_id', $targetUser->id);
+                        })
+                        ->first();
+                    $conversationId = $directConv?->id;
+                } elseif ($friendship->status === 'pending') {
+                    if ($friendship->user_id === $currentUserId) {
+                        $status = 'pending_sent';
+                        $label = 'Đã gửi lời mời kết bạn (Chờ phản hồi)';
+                    } else {
+                        $status = 'pending_received';
+                        $label = 'Người này đã gửi lời mời cho bạn';
+                    }
+                } elseif ($friendship->status === 'blocked') {
+                    $status = 'blocked';
+                    $label = 'Không thể kết bạn với người dùng này';
+                }
+            }
+        }
+
+        return response()->json([
+            'found' => true,
+            'user' => [
+                'id' => $targetUser->id,
+                'name' => $targetUser->name,
+                'email' => $targetUser->email,
+                'avatar' => $targetUser->avatar,
+            ],
+            'relationship' => [
+                'status' => $status,
+                'label' => $label,
+                'friendship_id' => $friendshipId,
+                'conversation_id' => $conversationId,
+            ]
+        ]);
     }
 
     public function sendRequest(Request $request)
     {
-        $email = $request->email;
-        $userId = Auth::id();
+        $currentUserId = Auth::id();
+        $friendId = $request->input('friend_id');
+        $email = trim($request->input('email', ''));
 
-        $friend = User::where('email', $email)->first();
-        
+        if (!$friendId && $email) {
+            $friend = User::where('email', $email)->first();
+            $friendId = $friend?->id;
+        } else {
+            $friend = User::find($friendId);
+        }
+
         if (!$friend) {
-            return response()->json(['message' => 'Người dùng không tồn tại'], 404);
+            return response()->json(['message' => 'Người dùng không tồn tại.'], 404);
         }
 
-        $friendId = $friend->id;
-
-        if($friendId == $userId) {
-            return response()->json(['message' => 'Bạn không thể gửi lời mời kết bạn cho chính mình'], 400);
+        if ($friend->id === $currentUserId) {
+            return response()->json(['message' => 'Bạn không thể gửi lời mời kết bạn cho chính mình.'], 400);
         }
 
-        $exists = Friendship::where(function ($query) use ($userId, $friendId) {
-            $query->where('user_id', $userId)->where('friend_id', $friendId);
-        })->orWhere(function ($query) use ($userId, $friendId) {
-            $query->where('user_id', $friendId)->where('friend_id', $userId);
+        $exists = Friendship::where(function ($query) use ($currentUserId, $friend) {
+            $query->where('user_id', $currentUserId)->where('friend_id', $friend->id);
+        })->orWhere(function ($query) use ($currentUserId, $friend) {
+            $query->where('user_id', $friend->id)->where('friend_id', $currentUserId);
         })->first();
 
         if ($exists) {
-            return response()->json(['message' => 'Yêu cầu kết bạn đã tồn tại hoặc hai người đã là bạn'], 400);
+            if ($exists->status === 'accepted') {
+                return response()->json(['message' => 'Hai người đã là bạn bè rồi.'], 400);
+            }
+            if ($exists->status === 'pending') {
+                if ($exists->user_id === $currentUserId) {
+                    return response()->json(['message' => 'Bạn đã gửi lời mời kết bạn trước đó rồi.'], 400);
+                } else {
+                    return response()->json(['message' => 'Người này đã gửi lời mời cho bạn, vui lòng chấp nhận lời mời.'], 400);
+                }
+            }
+            if ($exists->status === 'blocked') {
+                return response()->json(['message' => 'Không thể gửi lời mời cho người dùng này.'], 400);
+            }
         }
 
-        Friendship::create([
-            'user_id' => $userId,
-            'friend_id' => $friendId,
+        $newFriendship = Friendship::create([
+            'user_id' => $currentUserId,
+            'friend_id' => $friend->id,
             'status' => 'pending',
         ]);
 
-        return response()->json(['message' => 'Đã gửi lời mời kết bạn thành công']);
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã gửi lời mời kết bạn thành công.',
+            'friendship_id' => $newFriendship->id,
+        ]);
     }
 
     public function acceptRequest($id)
@@ -94,10 +183,22 @@ class FriendshipController extends Controller
                 return $conv;
             });
 
-            return redirect()->route('app.chat-board.show', $conversation->id)->with('success', 'Đã đồng ý kết bạn và khởi tạo cuộc trò chuyện');
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Đã đồng ý kết bạn và khởi tạo cuộc trò chuyện.',
+                    'conversation_id' => $conversation->id,
+                    'redirect_url' => route('app.chat-board.show', $conversation->id),
+                ]);
+            }
+
+            return redirect()->route('app.chat-board.show', $conversation->id)->with('success', 'Đã đồng ý kết bạn và khởi tạo cuộc trò chuyện.');
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("Lỗi khi đồng ý kết bạn (ID: {$id}): " . $e->getMessage());
-            return redirect()->back()->with('error', 'Đã xảy ra lỗi khi đồng ý kết bạn');
+            if (request()->expectsJson()) {
+                return response()->json(['message' => 'Đã xảy ra lỗi khi đồng ý kết bạn.'], 500);
+            }
+            return redirect()->back()->with('error', 'Đã xảy ra lỗi khi đồng ý kết bạn.');
         }
     }
 }

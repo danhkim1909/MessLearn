@@ -17,6 +17,17 @@ class Conversation extends Model
         'avatar',
     ];
 
+    // Accessors
+    public function getIsGroupAttribute(): bool
+    {
+        return $this->type === 'group';
+    }
+
+    public function getNameAttribute(): ?string
+    {
+        return $this->title;
+    }
+
     // Relationships
     public function participants(): HasMany
     {

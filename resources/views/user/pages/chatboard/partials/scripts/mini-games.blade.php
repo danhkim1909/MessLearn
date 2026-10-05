@@ -382,6 +382,23 @@ function toggleReactionMenu(messageId) {
             const msgEl = document.getElementById('msg-' + message.id);
             if (!msgEl) return;
 
+            if (message.type === 'recalled') {
+                msgEl.outerHTML = buildMessageHtml(message);
+                lucide.createIcons();
+
+                const banner = document.getElementById('upcoming-reminder-banner');
+                if (banner && parseInt(banner.getAttribute('data-event-id')) === message.id) {
+                    banner.classList.add('hidden');
+                    banner.setAttribute('data-target-time', '');
+                    banner.setAttribute('data-event-id', '');
+                }
+
+                if (wasNearBottom) {
+                    smartScrollToBottom(true, true);
+                }
+                return;
+            }
+
             if (message.type === 'game_rps') {
                 const rpsEl = document.getElementById('rps-card-' + message.id);
                 if (rpsEl) {

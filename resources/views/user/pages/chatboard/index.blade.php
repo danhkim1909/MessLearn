@@ -41,6 +41,8 @@
     @include('user.pages.chatboard.partials.modals.modal-take-quiz')
     @include('user.pages.chatboard.partials.modals.modal-quiz-leaderboard')
     @include('user.pages.chatboard.partials.modals.modal-create-event')
+    @include('user.pages.chatboard.partials.modals.modal-document-viewer')
+    @include('user.pages.chatboard.partials.modals.modal-forward-message')
 
 @endsection
 
