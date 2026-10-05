@@ -200,13 +200,41 @@
                                             </div>
                                         @endif
                                         
-                                        <!-- Nút Reply -->
+                                        <!-- Action Toolbar: Thả cảm xúc & Reply -->
                                         @php
-                                            $replyPreview = $message->type === 'quiz' ? 'Bài kiểm tra: ' . $message->body : ($message->type === 'audio' ? '[Tin nhắn thoại]' : ($message->type === 'image' ? '[Hình ảnh]' : $message->body));
+                                            $replyPreview = $message->type === 'quiz' ? 'Bài kiểm tra: ' . $message->body : ($message->type === 'audio' ? '[Tin nhắn thoại]' : ($message->type === 'image' ? '[Hình ảnh]' : ($message->type === 'game_dice' ? '[Tung xúc xắc]' : ($message->type === 'game_rps' ? '[Oẳn tù tì]' : $message->body))));
                                         @endphp
-                                        <button onclick="prepareReply({{ $message->id }}, '{{ addslashes($message->user->name) }}', '{{ addslashes(str_replace(["\r", "\n"], ' ', \Illuminate\Support\Str::limit($replyPreview, 50))) }}')" class="absolute {{ $isMine ? 'right-full mr-2' : 'left-full ml-2' }} top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10" title="Trả lời">
-                                            <i data-lucide="reply" class="w-3.5 h-3.5"></i>
-                                        </button>
+                                        <div class="absolute {{ $isMine ? 'right-full mr-2' : 'left-full ml-2' }} top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                            <div class="relative reaction-picker-wrap">
+                                                <button type="button" onclick="toggleReactionMenu({{ $message->id }})" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-500 shadow-sm flex items-center justify-center transition-colors" title="Thả cảm xúc">
+                                                    <i data-lucide="smile" class="w-3.5 h-3.5"></i>
+                                                </button>
+                                                <div id="reaction-menu-{{ $message->id }}" class="hidden reaction-popup absolute {{ $isMine ? 'right-0' : 'left-0' }} bottom-full mb-1 p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-lg items-center gap-1 z-30">
+                                                    <button type="button" onclick="toggleMessageReaction({{ $message->id }}, 'like')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-sky-500 hover:scale-125 transition-transform" title="Thích">
+                                                        <i data-lucide="thumbs-up" class="w-4 h-4"></i>
+                                                    </button>
+                                                    <button type="button" onclick="toggleMessageReaction({{ $message->id }}, 'heart')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-rose-500 hover:scale-125 transition-transform" title="Yêu thích">
+                                                        <i data-lucide="heart" class="w-4 h-4"></i>
+                                                    </button>
+                                                    <button type="button" onclick="toggleMessageReaction({{ $message->id }}, 'laugh')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-amber-500 hover:scale-125 transition-transform" title="Haha">
+                                                        <i data-lucide="smile" class="w-4 h-4"></i>
+                                                    </button>
+                                                    <button type="button" onclick="toggleMessageReaction({{ $message->id }}, 'wow')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-violet-500 hover:scale-125 transition-transform" title="Wow">
+                                                        <i data-lucide="sparkles" class="w-4 h-4"></i>
+                                                    </button>
+                                                    <button type="button" onclick="toggleMessageReaction({{ $message->id }}, 'sad')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-blue-400 hover:scale-125 transition-transform" title="Buồn">
+                                                        <i data-lucide="frown" class="w-4 h-4"></i>
+                                                    </button>
+                                                    <button type="button" onclick="toggleMessageReaction({{ $message->id }}, 'angry')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-orange-500 hover:scale-125 transition-transform" title="Phẫn nộ">
+                                                        <i data-lucide="flame" class="w-4 h-4"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <button type="button" onclick="prepareReply({{ $message->id }}, '{{ addslashes($message->user->name) }}', '{{ addslashes(str_replace(["\r", "\n"], ' ', \Illuminate\Support\Str::limit($replyPreview, 50))) }}')" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm flex items-center justify-center transition-colors" title="Trả lời">
+                                                <i data-lucide="reply" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                        </div>
+
                                         @if($message->type === 'quiz')
                                             <div class="flex flex-col gap-2 {{ $isMine ? 'text-white' : 'text-slate-800 dark:text-slate-200' }}">
                                                 <div class="flex items-center gap-2 font-bold mb-1">
@@ -269,9 +297,157 @@
                                                     <p class="text-xs pt-1">{!! nl2br(e($message->body)) !!}</p>
                                                 @endif
                                             </div>
+                                        @elseif($message->type === 'game_dice')
+                                            @php
+                                                $diceNum = $message->metadata['dice'] ?? 1;
+                                            @endphp
+                                            <div class="flex flex-col gap-2 py-1 min-w-[200px]">
+                                                <div class="flex items-center gap-2 text-xs font-bold opacity-90 border-b {{ $isMine ? 'border-white/20' : 'border-slate-200 dark:border-slate-700' }} pb-1.5">
+                                                    <i data-lucide="box" class="w-4 h-4 text-indigo-400"></i>
+                                                    <span>Tung xúc xắc</span>
+                                                </div>
+                                                @if($message->body)
+                                                    <p class="text-xs italic opacity-90">"{{ $message->body }}"</p>
+                                                @endif
+                                                <div class="flex items-center gap-3 py-1">
+                                                    <div class="w-12 h-12 rounded-2xl {{ $isMine ? 'bg-white text-indigo-600' : 'bg-indigo-500 text-white' }} flex items-center justify-center font-black text-2xl shadow-md shrink-0">
+                                                        {{ $diceNum }}
+                                                    </div>
+                                                    <div>
+                                                        <div class="text-[10px] opacity-75">Kết quả ngẫu nhiên:</div>
+                                                        <div class="font-extrabold text-sm">{{ $diceNum }} điểm</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @elseif($message->type === 'game_rps')
+                                            @php
+                                                $rpsMeta = $message->metadata ?? [];
+                                                $rpsStatus = $rpsMeta['status'] ?? 'waiting';
+                                                $creatorId = $rpsMeta['creator_id'] ?? $message->user_id;
+                                                $isCreator = $creatorId === Auth::id();
+                                                $winnerId = $rpsMeta['winner_id'] ?? null;
+                                            @endphp
+                                            <div id="rps-card-{{ $message->id }}" class="flex flex-col gap-2 py-1 min-w-[240px]">
+                                                <div class="flex items-center justify-between text-xs font-bold border-b {{ $isMine ? 'border-white/20' : 'border-slate-200 dark:border-slate-700' }} pb-1.5">
+                                                    <div class="flex items-center gap-1.5">
+                                                        <i data-lucide="swords" class="w-4 h-4 text-amber-400"></i>
+                                                        <span>Thách đấu Oẳn Tù Tì</span>
+                                                    </div>
+                                                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold {{ $rpsStatus === 'completed' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/20 text-amber-600 dark:text-amber-400' }}">
+                                                        {{ $rpsStatus === 'completed' ? 'Đã xong' : 'Đang chờ' }}
+                                                    </span>
+                                                </div>
+                                                @if($message->body)
+                                                    <p class="text-xs italic opacity-90">"{{ $message->body }}"</p>
+                                                @endif
+
+                                                @if($rpsStatus === 'waiting')
+                                                    @if($isCreator)
+                                                        <div class="p-2.5 rounded-xl {{ $isMine ? 'bg-black/15' : 'bg-black/5 dark:bg-white/5' }} text-center text-xs opacity-90">
+                                                            <p class="font-medium">Nước đi của bạn được giữ bí mật.</p>
+                                                            <p class="text-[11px] opacity-75 mt-0.5">Đang chờ đối thủ nhận lời thách đấu...</p>
+                                                        </div>
+                                                    @else
+                                                        <div class="p-2.5 rounded-xl {{ $isMine ? 'bg-black/15' : 'bg-slate-50 dark:bg-slate-900/60' }} border {{ $isMine ? 'border-white/10' : 'border-slate-200 dark:border-slate-700' }} text-center">
+                                                            <p class="text-xs font-bold mb-2">Chọn nước đi để đối đầu:</p>
+                                                            <div class="grid grid-cols-3 gap-2">
+                                                                <button type="button" onclick="playRpsGame({{ $message->id }}, 'rock')" class="py-2 px-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex flex-col items-center gap-1 shadow-sm transition-all hover:scale-105 active:scale-95" title="Búa">
+                                                                    <i data-lucide="shield" class="w-4 h-4 text-indigo-500"></i>
+                                                                    <span class="text-[10px] font-bold">Búa</span>
+                                                                </button>
+                                                                <button type="button" onclick="playRpsGame({{ $message->id }}, 'paper')" class="py-2 px-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex flex-col items-center gap-1 shadow-sm transition-all hover:scale-105 active:scale-95" title="Bao">
+                                                                    <i data-lucide="hand" class="w-4 h-4 text-indigo-500"></i>
+                                                                    <span class="text-[10px] font-bold">Bao</span>
+                                                                </button>
+                                                                <button type="button" onclick="playRpsGame({{ $message->id }}, 'scissors')" class="py-2 px-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex flex-col items-center gap-1 shadow-sm transition-all hover:scale-105 active:scale-95" title="Kéo">
+                                                                    <i data-lucide="scissors" class="w-4 h-4 text-indigo-500"></i>
+                                                                    <span class="text-[10px] font-bold">Kéo</span>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    @endif
+                                                @else
+                                                    @php
+                                                        $creatorChoice = $rpsMeta['creator_choice'] ?? 'rock';
+                                                        $opponentChoice = $rpsMeta['opponent_choice'] ?? 'rock';
+                                                        $creatorName = $rpsMeta['creator_name'] ?? $message->user->name;
+                                                        $opponentName = $rpsMeta['opponent_name'] ?? 'Đối thủ';
+                                                        
+                                                        $choiceLabels = [
+                                                            'rock' => ['label' => 'Búa', 'icon' => 'shield'],
+                                                            'paper' => ['label' => 'Bao', 'icon' => 'hand'],
+                                                            'scissors' => ['label' => 'Kéo', 'icon' => 'scissors']
+                                                        ];
+
+                                                        $creatorItem = $choiceLabels[$creatorChoice] ?? $choiceLabels['rock'];
+                                                        $opponentItem = $choiceLabels[$opponentChoice] ?? $choiceLabels['rock'];
+                                                        
+                                                        $isDraw = $winnerId === 'draw';
+                                                        $isCreatorWinner = $winnerId == $creatorId;
+                                                        $winnerName = $isDraw ? 'Hòa' : ($isCreatorWinner ? $creatorName : $opponentName);
+                                                    @endphp
+                                                    <div class="p-2.5 rounded-xl {{ $isMine ? 'bg-black/15' : 'bg-slate-50 dark:bg-slate-900/60' }} border {{ $isMine ? 'border-white/10' : 'border-slate-200 dark:border-slate-700' }} space-y-2">
+                                                        <div class="flex items-center justify-between gap-2 text-center">
+                                                            <div class="flex-1 min-w-0">
+                                                                <div class="text-[10px] opacity-75 truncate mb-1">{{ $creatorName }}</div>
+                                                                <div class="p-1.5 rounded-lg bg-white dark:bg-slate-800 inline-flex flex-col items-center shadow-xs">
+                                                                    <i data-lucide="{{ $creatorItem['icon'] }}" class="w-4 h-4 text-indigo-500"></i>
+                                                                    <span class="text-[10px] font-bold text-slate-700 dark:text-slate-300 mt-0.5">{{ $creatorItem['label'] }}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div class="font-black text-xs opacity-60">VS</div>
+                                                            <div class="flex-1 min-w-0">
+                                                                <div class="text-[10px] opacity-75 truncate mb-1">{{ $opponentName }}</div>
+                                                                <div class="p-1.5 rounded-lg bg-white dark:bg-slate-800 inline-flex flex-col items-center shadow-xs">
+                                                                    <i data-lucide="{{ $opponentItem['icon'] }}" class="w-4 h-4 text-indigo-500"></i>
+                                                                    <span class="text-[10px] font-bold text-slate-700 dark:text-slate-300 mt-0.5">{{ $opponentItem['label'] }}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="text-center pt-1 border-t {{ $isMine ? 'border-white/10' : 'border-slate-200 dark:border-slate-700' }}">
+                                                            @if($isDraw)
+                                                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-extrabold text-[10px]">
+                                                                    <i data-lucide="minus-circle" class="w-3 h-3"></i>
+                                                                    HÒA NHAU!
+                                                                </span>
+                                                            @else
+                                                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-extrabold text-[10px]">
+                                                                    <i data-lucide="trophy" class="w-3 h-3"></i>
+                                                                    {{ $winnerName }} CHIẾN THẮNG!
+                                                                </span>
+                                                            @endif
+                                                        </div>
+                                                    </div>
+                                                @endif
+                                            </div>
                                         @else
                                             {!! nl2br(e($message->body)) !!}
                                         @endif
+
+                                        <!-- Khay hiển thị Reactions đã thả -->
+                                        @php
+                                            $groupedReactions = $message->reactions ? $message->reactions->groupBy('reaction') : collect();
+                                            $reactionIconMap = [
+                                                'like' => ['icon' => 'thumbs-up', 'color' => 'text-sky-500'],
+                                                'heart' => ['icon' => 'heart', 'color' => 'text-rose-500'],
+                                                'laugh' => ['icon' => 'smile', 'color' => 'text-amber-500'],
+                                                'wow' => ['icon' => 'sparkles', 'color' => 'text-violet-500'],
+                                                'sad' => ['icon' => 'frown', 'color' => 'text-blue-400'],
+                                                'angry' => ['icon' => 'flame', 'color' => 'text-orange-500'],
+                                            ];
+                                        @endphp
+                                        <div id="reactions-bar-{{ $message->id }}" class="flex flex-wrap gap-1 mt-1.5 {{ $isMine ? 'justify-end' : 'justify-start' }} {{ $groupedReactions->isEmpty() ? 'hidden' : '' }}">
+                                            @foreach($groupedReactions as $rxType => $rxItems)
+                                                @php
+                                                    $hasMe = $rxItems->contains('user_id', Auth::id());
+                                                    $iconInfo = $reactionIconMap[$rxType] ?? ['icon' => 'smile', 'color' => 'text-slate-500'];
+                                                @endphp
+                                                <button type="button" onclick="toggleMessageReaction({{ $message->id }}, '{{ $rxType }}')" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all hover:scale-105 active:scale-95 {{ $hasMe ? 'bg-sky-50 dark:bg-sky-950/60 border-sky-400 text-sky-600 dark:text-sky-400' : ($isMine ? 'bg-white/20 border-white/30 text-white' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300') }}" title="{{ $rxType }}">
+                                                    <i data-lucide="{{ $iconInfo['icon'] }}" class="w-3 h-3 {{ $hasMe ? $iconInfo['color'] : '' }}"></i>
+                                                    <span>{{ $rxItems->count() }}</span>
+                                                </button>
+                                            @endforeach
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -455,18 +631,18 @@
                 <span class="text-[9px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">Sắp có</span>
             </button>
 
-            {{-- Mini-game - placeholder --}}
-            <button disabled class="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl opacity-60 cursor-not-allowed">
+            {{-- Mini-game --}}
+            <button type="button" onclick="openModal('modal-mini-games')" class="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl hover:border-indigo-500 hover:shadow-md hover:shadow-indigo-500/10 transition-all group">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 flex items-center justify-center">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 flex items-center justify-center group-hover:scale-110 transition-transform">
                         <i data-lucide="gamepad-2" class="w-5 h-5"></i>
                     </div>
                     <div class="text-left">
                         <h4 class="font-bold text-sm text-slate-900 dark:text-white">Mini-game</h4>
-                        <p class="text-[10px] text-slate-500">Xúc xắc, kéo búa bao...</p>
+                        <p class="text-[10px] text-slate-500">Xúc xắc, Oẳn tù tì...</p>
                     </div>
                 </div>
-                <span class="text-[9px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">Sắp có</span>
+                <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 group-hover:text-indigo-500 transition-colors"></i>
             </button>
 
         </div>
@@ -516,6 +692,109 @@
                     <button type="button" onclick="addQuizQuestion()" class="px-6 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-sky-500 hover:text-sky-500 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-2">
                         <i data-lucide="plus-circle" class="w-4 h-4"></i>
                         Thêm Câu Hỏi Mới
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: MINI-GAMES (XÚC XẮC & OẲN TÙ TÌ) -->
+<div id="modal-mini-games" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 w-full max-w-lg rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 p-5 shrink-0">
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 flex items-center justify-center">
+                    <i data-lucide="gamepad-2" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-base text-slate-900 dark:text-white">Mini-game</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Giải trí & Bốc thăm công bằng</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeModal('modal-mini-games')" class="p-2 text-slate-400 hover:text-rose-500 transition-colors rounded-lg">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="flex border-b border-slate-100 dark:border-slate-700/60 px-5 pt-3 gap-2 bg-slate-50/50 dark:bg-slate-900/20">
+            <button type="button" id="tab-btn-dice" onclick="switchMiniGameTab('dice')" class="pb-2.5 px-3 border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center gap-2 transition-all">
+                <i data-lucide="box" class="w-4 h-4"></i>
+                Tung Xúc Xắc
+            </button>
+            <button type="button" id="tab-btn-rps" onclick="switchMiniGameTab('rps')" class="pb-2.5 px-3 border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium text-xs flex items-center gap-2 transition-all">
+                <i data-lucide="swords" class="w-4 h-4"></i>
+                Oẳn Tù Tì (1-1)
+            </button>
+        </div>
+
+        <div class="p-5 flex-1 overflow-y-auto">
+            <!-- TAB 1: TUNG XÚC XẮC -->
+            <div id="tab-content-dice" class="space-y-4">
+                <div class="p-4 bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-indigo-500 text-white flex items-center justify-center font-black text-xl shadow-md shadow-indigo-500/20 shrink-0">
+                        <i data-lucide="box" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-sm text-slate-900 dark:text-white">Tung xúc xắc 6 mặt</h4>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Tạo kết quả ngẫu nhiên từ 1 đến 6 cho cả nhóm cùng theo dõi.</p>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Mục đích tung (Không bắt buộc)</label>
+                    <input type="text" id="dice-note-input" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors dark:text-white" placeholder="vd: Ai rửa bát?, Chọn người thuyết trình tuần này...">
+                </div>
+
+                <div class="pt-2">
+                    <button type="button" id="btn-submit-dice" onclick="submitRollDice()" class="w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-md shadow-indigo-500/20 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="box" class="w-4 h-4"></i>
+                        Tung Xúc Xắc Ngay
+                    </button>
+                </div>
+            </div>
+
+            <!-- TAB 2: OẲN TÙ TÌ -->
+            <div id="tab-content-rps" class="hidden space-y-4">
+                <div class="p-4 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 rounded-2xl flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-black text-xl shadow-md shadow-amber-500/20 shrink-0">
+                        <i data-lucide="swords" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-sm text-slate-900 dark:text-white">Thách đấu Oẳn Tù Tì</h4>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Chọn nước đi bí mật. Người đầu tiên nhận lời đấu sẽ đối chiếu kết quả ngay lập tức!</p>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Chọn nước đi bí mật của bạn</label>
+                    <input type="hidden" id="rps-selected-choice" value="rock">
+                    <div class="grid grid-cols-3 gap-3">
+                        <button type="button" onclick="selectRpsChoice('rock')" id="rps-choice-rock" class="rps-choice-btn p-3.5 rounded-2xl border-2 border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex flex-col items-center justify-center gap-2 transition-all">
+                            <i data-lucide="shield" class="w-7 h-7"></i>
+                            <span class="font-bold text-xs">Búa</span>
+                        </button>
+                        <button type="button" onclick="selectRpsChoice('paper')" id="rps-choice-paper" class="rps-choice-btn p-3.5 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex flex-col items-center justify-center gap-2 transition-all">
+                            <i data-lucide="hand" class="w-7 h-7"></i>
+                            <span class="font-bold text-xs">Bao</span>
+                        </button>
+                        <button type="button" onclick="selectRpsChoice('scissors')" id="rps-choice-scissors" class="rps-choice-btn p-3.5 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex flex-col items-center justify-center gap-2 transition-all">
+                            <i data-lucide="scissors" class="w-7 h-7"></i>
+                            <span class="font-bold text-xs">Kéo</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Lời thách đấu (Không bắt buộc)</label>
+                    <input type="text" id="rps-note-input" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors dark:text-white" placeholder="vd: Ai dám solo nào?, Kèo một cốc trà sữa nhé...">
+                </div>
+
+                <div class="pt-2">
+                    <button type="button" id="btn-submit-rps" onclick="submitCreateRps()" class="w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-md shadow-indigo-500/20 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                        Gửi Lời Thách Đấu
                     </button>
                 </div>
             </div>
@@ -1097,11 +1376,181 @@
             }
         }
 
+        function renderRpsCardHtml(message, isMine) {
+            const rpsMeta = message.metadata || {};
+            const rpsStatus = rpsMeta.status || 'waiting';
+            const creatorId = rpsMeta.creator_id || message.user_id;
+            const currentUserId = {{ Auth::id() }};
+            const isCreator = creatorId === currentUserId;
+            const winnerId = rpsMeta.winner_id;
+
+            const choiceLabels = {
+                rock: { label: 'Búa', icon: 'shield' },
+                paper: { label: 'Bao', icon: 'hand' },
+                scissors: { label: 'Kéo', icon: 'scissors' }
+            };
+
+            let rpsBody = '';
+            if (rpsStatus === 'waiting') {
+                if (isCreator) {
+                    rpsBody = `
+                        <div class="p-2.5 rounded-xl ${isMine ? 'bg-black/15' : 'bg-black/5 dark:bg-white/5'} text-center text-xs opacity-90">
+                            <p class="font-medium">Nước đi của bạn được giữ bí mật.</p>
+                            <p class="text-[11px] opacity-75 mt-0.5">Đang chờ đối thủ nhận lời thách đấu...</p>
+                        </div>
+                    `;
+                } else {
+                    rpsBody = `
+                        <div class="p-2.5 rounded-xl ${isMine ? 'bg-black/15' : 'bg-slate-50 dark:bg-slate-900/60'} border ${isMine ? 'border-white/10' : 'border-slate-200 dark:border-slate-700'} text-center">
+                            <p class="text-xs font-bold mb-2">Chọn nước đi để đối đầu:</p>
+                            <div class="grid grid-cols-3 gap-2">
+                                <button type="button" onclick="playRpsGame(${message.id}, 'rock')" class="py-2 px-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex flex-col items-center gap-1 shadow-sm transition-all hover:scale-105 active:scale-95" title="Búa">
+                                    <i data-lucide="shield" class="w-4 h-4 text-indigo-500"></i>
+                                    <span class="text-[10px] font-bold">Búa</span>
+                                </button>
+                                <button type="button" onclick="playRpsGame(${message.id}, 'paper')" class="py-2 px-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex flex-col items-center gap-1 shadow-sm transition-all hover:scale-105 active:scale-95" title="Bao">
+                                    <i data-lucide="hand" class="w-4 h-4 text-indigo-500"></i>
+                                    <span class="text-[10px] font-bold">Bao</span>
+                                </button>
+                                <button type="button" onclick="playRpsGame(${message.id}, 'scissors')" class="py-2 px-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex flex-col items-center gap-1 shadow-sm transition-all hover:scale-105 active:scale-95" title="Kéo">
+                                    <i data-lucide="scissors" class="w-4 h-4 text-indigo-500"></i>
+                                    <span class="text-[10px] font-bold">Kéo</span>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else {
+                const creatorChoice = rpsMeta.creator_choice || 'rock';
+                const opponentChoice = rpsMeta.opponent_choice || 'rock';
+                const creatorName = rpsMeta.creator_name || (message.user ? message.user.name : 'Người thách đấu');
+                const opponentName = rpsMeta.opponent_name || 'Đối thủ';
+
+                const cItem = choiceLabels[creatorChoice] || choiceLabels.rock;
+                const oItem = choiceLabels[opponentChoice] || choiceLabels.rock;
+
+                const isDraw = winnerId === 'draw';
+                const isCreatorWinner = winnerId == creatorId;
+                const winnerName = isDraw ? 'Hòa' : (isCreatorWinner ? creatorName : opponentName);
+
+                rpsBody = `
+                    <div class="p-2.5 rounded-xl ${isMine ? 'bg-black/15' : 'bg-slate-50 dark:bg-slate-900/60'} border ${isMine ? 'border-white/10' : 'border-slate-200 dark:border-slate-700'} space-y-2">
+                        <div class="flex items-center justify-between gap-2 text-center">
+                            <div class="flex-1 min-w-0">
+                                <div class="text-[10px] opacity-75 truncate mb-1">${creatorName}</div>
+                                <div class="p-1.5 rounded-lg bg-white dark:bg-slate-800 inline-flex flex-col items-center shadow-xs">
+                                    <i data-lucide="${cItem.icon}" class="w-4 h-4 text-indigo-500"></i>
+                                    <span class="text-[10px] font-bold text-slate-700 dark:text-slate-300 mt-0.5">${cItem.label}</span>
+                                </div>
+                            </div>
+                            <div class="font-black text-xs opacity-60">VS</div>
+                            <div class="flex-1 min-w-0">
+                                <div class="text-[10px] opacity-75 truncate mb-1">${opponentName}</div>
+                                <div class="p-1.5 rounded-lg bg-white dark:bg-slate-800 inline-flex flex-col items-center shadow-xs">
+                                    <i data-lucide="${oItem.icon}" class="w-4 h-4 text-indigo-500"></i>
+                                    <span class="text-[10px] font-bold text-slate-700 dark:text-slate-300 mt-0.5">${oItem.label}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-center pt-1 border-t ${isMine ? 'border-white/10' : 'border-slate-200 dark:border-slate-700'}">
+                            ${isDraw ? `
+                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-extrabold text-[10px]">
+                                    <i data-lucide="minus-circle" class="w-3 h-3"></i>
+                                    HÒA NHAU!
+                                </span>
+                            ` : `
+                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-extrabold text-[10px]">
+                                    <i data-lucide="trophy" class="w-3 h-3"></i>
+                                    ${winnerName} CHIẾN THẮNG!
+                                </span>
+                            `}
+                        </div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div id="rps-card-${message.id}" class="flex flex-col gap-2 py-1 min-w-[240px]">
+                    <div class="flex items-center justify-between text-xs font-bold border-b ${isMine ? 'border-white/20' : 'border-slate-200 dark:border-slate-700'} pb-1.5">
+                        <div class="flex items-center gap-1.5">
+                            <i data-lucide="swords" class="w-4 h-4 text-amber-400"></i>
+                            <span>Thách đấu Oẳn Tù Tì</span>
+                        </div>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${rpsStatus === 'completed' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/20 text-amber-600 dark:text-amber-400'}">
+                            ${rpsStatus === 'completed' ? 'Đã xong' : 'Đang chờ'}
+                        </span>
+                    </div>
+                    ${message.body ? `<p class="text-xs italic opacity-90">"${message.body}"</p>` : ''}
+                    ${rpsBody}
+                </div>
+            `;
+        }
+
+        function updateReactionsBar(messageId, reactions) {
+            const bar = document.getElementById('reactions-bar-' + messageId);
+            if (!bar) return;
+
+            if (!reactions || reactions.length === 0) {
+                bar.innerHTML = '';
+                bar.classList.add('hidden');
+                return;
+            }
+
+            const currentUserId = {{ Auth::id() }};
+            const reactionIconMap = {
+                like: { icon: 'thumbs-up', color: 'text-sky-500' },
+                heart: { icon: 'heart', color: 'text-rose-500' },
+                laugh: { icon: 'smile', color: 'text-amber-500' },
+                wow: { icon: 'sparkles', color: 'text-violet-500' },
+                sad: { icon: 'frown', color: 'text-blue-400' },
+                angry: { icon: 'flame', color: 'text-orange-500' }
+            };
+
+            const groups = {};
+            reactions.forEach(rx => {
+                if (!groups[rx.reaction]) {
+                    groups[rx.reaction] = { count: 0, hasMe: false };
+                }
+                groups[rx.reaction].count++;
+                if (rx.user_id === currentUserId) {
+                    groups[rx.reaction].hasMe = true;
+                }
+            });
+
+            const isMine = bar.closest('.justify-end') !== null;
+            let html = '';
+
+            Object.keys(groups).forEach(type => {
+                const item = groups[type];
+                const iconInfo = reactionIconMap[type] || { icon: 'smile', color: 'text-slate-500' };
+                const activeClass = item.hasMe 
+                    ? 'bg-sky-50 dark:bg-sky-950/60 border-sky-400 text-sky-600 dark:text-sky-400'
+                    : (isMine ? 'bg-white/20 border-white/30 text-white' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300');
+
+                html += `
+                    <button type="button" onclick="toggleMessageReaction(${messageId}, '${type}')" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all hover:scale-105 active:scale-95 ${activeClass}" title="${type}">
+                        <i data-lucide="${iconInfo.icon}" class="w-3 h-3 ${item.hasMe ? iconInfo.color : ''}"></i>
+                        <span>${item.count}</span>
+                    </button>
+                `;
+            });
+
+            bar.innerHTML = html;
+            bar.classList.remove('hidden');
+            lucide.createIcons();
+        }
+
         function appendMessageToChat(message) {
             const chatContainer = document.getElementById('chat-messages-container');
             if(!chatContainer) return;
+            
+            if (document.getElementById('msg-' + message.id)) {
+                updateMessageInChat(message);
+                return;
+            }
+
             const isMine = message.user_id === {{ Auth::id() }};
-            const avatarChar = message.user.name.charAt(0).toUpperCase();
+            const avatarChar = (message.user && message.user.name) ? message.user.name.charAt(0).toUpperCase() : 'U';
 
             let innerContent = '';
             if (message.reply_to) {
@@ -1112,6 +1561,10 @@
                     replyText = '[Tin nhắn thoại]';
                 } else if (message.reply_to.type === 'image') {
                     replyText = '[Hình ảnh]' + (message.reply_to.body ? ': ' + message.reply_to.body : '');
+                } else if (message.reply_to.type === 'game_dice') {
+                    replyText = '[Tung xúc xắc]';
+                } else if (message.reply_to.type === 'game_rps') {
+                    replyText = '[Oẳn tù tì]';
                 }
                 innerContent += `
                     <div onclick="scrollToMessage(${message.reply_to_id})" class="cursor-pointer hover:opacity-100 transition-all mb-2 p-2 rounded-xl ${isMine ? 'bg-black/10' : 'bg-black/5 dark:bg-white/5'} border-l-2 ${isMine ? 'border-white/50' : 'border-sky-500'} text-[11px] opacity-80">
@@ -1180,6 +1633,28 @@
                         ${message.body ? `<p class="text-xs pt-1">${(message.body || '').replace(/\n/g, "<br>")}</p>` : ''}
                     </div>
                 `;
+            } else if (message.type === 'game_dice') {
+                const diceNum = (message.metadata && message.metadata.dice) ? message.metadata.dice : 1;
+                innerContent += `
+                    <div class="flex flex-col gap-2 py-1 min-w-[200px]">
+                        <div class="flex items-center gap-2 text-xs font-bold opacity-90 border-b ${isMine ? 'border-white/20' : 'border-slate-200 dark:border-slate-700'} pb-1.5">
+                            <i data-lucide="box" class="w-4 h-4 text-indigo-400"></i>
+                            <span>Tung xúc xắc</span>
+                        </div>
+                        ${message.body ? `<p class="text-xs italic opacity-90">"${message.body}"</p>` : ''}
+                        <div class="flex items-center gap-3 py-1">
+                            <div class="w-12 h-12 rounded-2xl ${isMine ? 'bg-white text-indigo-600' : 'bg-indigo-500 text-white'} flex items-center justify-center font-black text-2xl shadow-md shrink-0">
+                                ${diceNum}
+                            </div>
+                            <div>
+                                <div class="text-[10px] opacity-75">Kết quả ngẫu nhiên:</div>
+                                <div class="font-extrabold text-sm">${diceNum} điểm</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (message.type === 'game_rps') {
+                innerContent += renderRpsCardHtml(message, isMine);
             } else {
                 innerContent += (message.body || '').replace(/\n/g, "<br>");
             }
@@ -1191,6 +1666,10 @@
                 replyTooltip = '[Tin nhắn thoại]';
             } else if (message.type === 'image') {
                 replyTooltip = '[Hình ảnh]' + (message.body ? ': ' + message.body : '');
+            } else if (message.type === 'game_dice') {
+                replyTooltip = '[Tung xúc xắc]';
+            } else if (message.type === 'game_rps') {
+                replyTooltip = '[Oẳn tù tì]';
             }
 
             const messageHtml = `
@@ -1204,7 +1683,7 @@
                         <div>
                             ${!isMine ? `
                                 <div class="flex items-baseline gap-2 mb-1 ml-1">
-                                    <span class="text-xs font-bold text-slate-700 dark:text-slate-300">${message.user.name}</span>
+                                    <span class="text-xs font-bold text-slate-700 dark:text-slate-300">${message.user ? message.user.name : ''}</span>
                                     <span class="text-[10px] text-slate-400">Vừa xong</span>
                                 </div>
                             ` : `
@@ -1213,10 +1692,38 @@
                                 </div>
                             `}
                             <div class="${isMine ? 'bg-sky-500 text-white rounded-tr-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-sm'} px-4 py-2.5 rounded-2xl text-xs max-w-md relative group">
+                                <div class="absolute ${isMine ? 'right-full mr-2' : 'left-full ml-2'} top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                    <div class="relative reaction-picker-wrap">
+                                        <button type="button" onclick="toggleReactionMenu(${message.id})" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-500 shadow-sm flex items-center justify-center transition-colors" title="Thả cảm xúc">
+                                            <i data-lucide="smile" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                        <div id="reaction-menu-${message.id}" class="hidden reaction-popup absolute ${isMine ? 'right-0' : 'left-0'} bottom-full mb-1 p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-lg items-center gap-1 z-30">
+                                            <button type="button" onclick="toggleMessageReaction(${message.id}, 'like')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-sky-500 hover:scale-125 transition-transform" title="Thích">
+                                                <i data-lucide="thumbs-up" class="w-4 h-4"></i>
+                                            </button>
+                                            <button type="button" onclick="toggleMessageReaction(${message.id}, 'heart')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-rose-500 hover:scale-125 transition-transform" title="Yêu thích">
+                                                <i data-lucide="heart" class="w-4 h-4"></i>
+                                            </button>
+                                            <button type="button" onclick="toggleMessageReaction(${message.id}, 'laugh')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-amber-500 hover:scale-125 transition-transform" title="Haha">
+                                                <i data-lucide="smile" class="w-4 h-4"></i>
+                                            </button>
+                                            <button type="button" onclick="toggleMessageReaction(${message.id}, 'wow')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-violet-500 hover:scale-125 transition-transform" title="Wow">
+                                                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                                            </button>
+                                            <button type="button" onclick="toggleMessageReaction(${message.id}, 'sad')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-blue-400 hover:scale-125 transition-transform" title="Buồn">
+                                                <i data-lucide="frown" class="w-4 h-4"></i>
+                                            </button>
+                                            <button type="button" onclick="toggleMessageReaction(${message.id}, 'angry')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-orange-500 hover:scale-125 transition-transform" title="Phẫn nộ">
+                                                <i data-lucide="flame" class="w-4 h-4"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <button type="button" onclick="prepareReply(${message.id}, '${(message.user ? message.user.name : '').replace(/'/g, '\\\'')}', '${replyTooltip.replace(/'/g, '\\\'').replace(/\r\n|\n|\r/g, ' ').substring(0, 50)}')" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm flex items-center justify-center transition-colors" title="Trả lời">
+                                        <i data-lucide="reply" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                </div>
                                 ${innerContent}
-                                <button onclick="prepareReply(${message.id}, '${(message.user.name || '').replace(/'/g, '\\\'')}', '${replyTooltip.replace(/'/g, '\\\'').replace(/\r\n|\n|\r/g, ' ').substring(0, 50)}')" class="absolute ${isMine ? 'right-full mr-2' : 'left-full ml-2'} top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10" title="Trả lời">
-                                    <i data-lucide="reply" class="w-3.5 h-3.5"></i>
-                                </button>
+                                <div id="reactions-bar-${message.id}" class="flex flex-wrap gap-1 mt-1.5 ${isMine ? 'justify-end' : 'justify-start'} hidden"></div>
                             </div>
                         </div>
                     </div>
@@ -1224,6 +1731,9 @@
             `;
 
             chatContainer.insertAdjacentHTML('beforeend', messageHtml);
+            if (message.reactions && message.reactions.length > 0) {
+                updateReactionsBar(message.id, message.reactions);
+            }
             smartScrollToBottom(isMine, true);
             lucide.createIcons();
         }
@@ -1512,6 +2022,231 @@
             }
         }
 
+        function toggleReactionMenu(messageId) {
+            const targetMenu = document.getElementById('reaction-menu-' + messageId);
+            if (!targetMenu) return;
+
+            document.querySelectorAll('.reaction-popup').forEach(el => {
+                if (el !== targetMenu) {
+                    el.classList.add('hidden');
+                    el.classList.remove('flex');
+                }
+            });
+
+            targetMenu.classList.toggle('hidden');
+            targetMenu.classList.toggle('flex');
+        }
+
+        async function toggleMessageReaction(messageId, reactionType) {
+            const targetMenu = document.getElementById('reaction-menu-' + messageId);
+            if (targetMenu) {
+                targetMenu.classList.add('hidden');
+                targetMenu.classList.remove('flex');
+            }
+
+            try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                };
+                if (typeof window.Echo !== 'undefined' && window.Echo.socketId()) {
+                    headers['X-Socket-ID'] = window.Echo.socketId();
+                }
+
+                const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation->id ?? 0 }}/reaction/${messageId}`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({ reaction: reactionType })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    updateReactionsBar(messageId, data.reactions);
+                } else {
+                    Toastify({ text: "Lỗi thả cảm xúc", style: { background: "#f43f5e" } }).showToast();
+                }
+            } catch (err) {
+                Toastify({ text: "Lỗi kết nối", style: { background: "#f43f5e" } }).showToast();
+            }
+        }
+
+        function switchMiniGameTab(tab) {
+            const diceTabBtn = document.getElementById('tab-btn-dice');
+            const rpsTabBtn = document.getElementById('tab-btn-rps');
+            const diceContent = document.getElementById('tab-content-dice');
+            const rpsContent = document.getElementById('tab-content-rps');
+
+            if (tab === 'dice') {
+                diceTabBtn.className = 'pb-2.5 px-3 border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center gap-2 transition-all';
+                rpsTabBtn.className = 'pb-2.5 px-3 border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium text-xs flex items-center gap-2 transition-all';
+                diceContent.classList.remove('hidden');
+                rpsContent.classList.add('hidden');
+            } else {
+                rpsTabBtn.className = 'pb-2.5 px-3 border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center gap-2 transition-all';
+                diceTabBtn.className = 'pb-2.5 px-3 border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium text-xs flex items-center gap-2 transition-all';
+                rpsContent.classList.remove('hidden');
+                diceContent.classList.add('hidden');
+            }
+            lucide.createIcons();
+        }
+
+        function selectRpsChoice(choice) {
+            document.getElementById('rps-selected-choice').value = choice;
+            const choices = ['rock', 'paper', 'scissors'];
+            choices.forEach(c => {
+                const btn = document.getElementById('rps-choice-' + c);
+                if (!btn) return;
+                if (c === choice) {
+                    btn.className = 'rps-choice-btn p-3.5 rounded-2xl border-2 border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex flex-col items-center justify-center gap-2 transition-all';
+                } else {
+                    btn.className = 'rps-choice-btn p-3.5 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex flex-col items-center justify-center gap-2 transition-all';
+                }
+            });
+        }
+
+        async function submitRollDice() {
+            const input = document.getElementById('dice-note-input');
+            const note = input ? input.value.trim() : '';
+            const btn = document.getElementById('btn-submit-dice');
+            const originalText = btn ? btn.innerHTML : '';
+
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Đang tung...';
+                lucide.createIcons();
+            }
+
+            try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                };
+                if (typeof window.Echo !== 'undefined' && window.Echo.socketId()) {
+                    headers['X-Socket-ID'] = window.Echo.socketId();
+                }
+
+                const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation->id ?? 0 }}/game/dice`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({ body: note })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    appendMessageToChat(data);
+                    closeModal('modal-mini-games');
+                    if (input) input.value = '';
+                    Toastify({ text: "Đã tung xúc xắc thành công!", style: { background: "#6366f1" } }).showToast();
+                } else {
+                    Toastify({ text: "Lỗi tung xúc xắc", style: { background: "#f43f5e" } }).showToast();
+                }
+            } catch (err) {
+                Toastify({ text: "Lỗi kết nối", style: { background: "#f43f5e" } }).showToast();
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                    lucide.createIcons();
+                }
+            }
+        }
+
+        async function submitCreateRps() {
+            const choice = document.getElementById('rps-selected-choice').value;
+            const input = document.getElementById('rps-note-input');
+            const note = input ? input.value.trim() : '';
+            const btn = document.getElementById('btn-submit-rps');
+            const originalText = btn ? btn.innerHTML : '';
+
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Đang gửi...';
+                lucide.createIcons();
+            }
+
+            try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                };
+                if (typeof window.Echo !== 'undefined' && window.Echo.socketId()) {
+                    headers['X-Socket-ID'] = window.Echo.socketId();
+                }
+
+                const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation->id ?? 0 }}/game/rps/create`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({ choice: choice, body: note })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    appendMessageToChat(data);
+                    closeModal('modal-mini-games');
+                    if (input) input.value = '';
+                    Toastify({ text: "Đã gửi lời thách đấu Oẳn Tù Tì!", style: { background: "#f59e0b" } }).showToast();
+                } else {
+                    Toastify({ text: "Lỗi tạo thách đấu", style: { background: "#f43f5e" } }).showToast();
+                }
+            } catch (err) {
+                Toastify({ text: "Lỗi kết nối", style: { background: "#f43f5e" } }).showToast();
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                    lucide.createIcons();
+                }
+            }
+        }
+
+        async function playRpsGame(messageId, choice) {
+            try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                };
+                if (typeof window.Echo !== 'undefined' && window.Echo.socketId()) {
+                    headers['X-Socket-ID'] = window.Echo.socketId();
+                }
+
+                const res = await fetch(`{{ url('app/conversation') }}/{{ $activeConversation->id ?? 0 }}/game/rps/${messageId}/play`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({ choice: choice })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    updateMessageInChat(data);
+                    Toastify({ text: "Đã hoàn thành lượt đối đầu!", style: { background: "#10b981" } }).showToast();
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    Toastify({ text: data.error || "Lỗi tham gia đối đầu", style: { background: "#f43f5e" } }).showToast();
+                }
+            } catch (err) {
+                Toastify({ text: "Lỗi kết nối", style: { background: "#f43f5e" } }).showToast();
+            }
+        }
+
+        function updateMessageInChat(message) {
+            const msgEl = document.getElementById('msg-' + message.id);
+            if (!msgEl) return;
+
+            if (message.type === 'game_rps') {
+                const rpsEl = document.getElementById('rps-card-' + message.id);
+                if (rpsEl) {
+                    const isMine = message.user_id === {{ Auth::id() }};
+                    rpsEl.outerHTML = renderRpsCardHtml(message, isMine);
+                }
+            }
+
+            if (message.reactions) {
+                updateReactionsBar(message.id, message.reactions);
+            }
+
+            lucide.createIcons();
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             smartScrollToBottom(true, false);
 
@@ -1519,8 +2254,20 @@
                 window.Echo.private('conversation.{{ $activeConversation->id }}')
                     .listen('.MessageSent', (e) => {
                         appendMessageToChat(e.message);
+                    })
+                    .listen('.MessageUpdated', (e) => {
+                        updateMessageInChat(e.message);
                     });
             }
+
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.reaction-picker-wrap')) {
+                    document.querySelectorAll('.reaction-popup').forEach(el => {
+                        el.classList.add('hidden');
+                        el.classList.remove('flex');
+                    });
+                }
+            });
         });
     @endif
 

@@ -52,7 +52,7 @@ class ChatBoardController extends Controller
             abort(403);
         }
 
-        $conversation->load(['messages.user', 'messages.replyTo.user', 'messages.quiz.submissions', 'participants.user']);
+        $conversation->load(['messages.user', 'messages.replyTo.user', 'messages.quiz.submissions', 'messages.reactions', 'participants.user']);
         
         $data = $this->getSidebarData();
         $data['activeConversation'] = $conversation;
