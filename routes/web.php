@@ -30,6 +30,7 @@ Route::prefix('app')->middleware(CheckLoginMiddleware::class)->name('app.')->gro
     Route::prefix('conversation')->name('conversation.')->group(function () {
         Route::post('/group', [ConversationController::class, 'storeGroup'])->name('store-group');
         Route::post('/{conversation}/message', [\App\Http\Controllers\User\MessageController::class, 'store'])->name('message.store');
+        Route::get('/{conversation}/messages/load-more', [\App\Http\Controllers\User\MessageController::class, 'loadMore'])->name('message.load-more');
         Route::post('/{conversation}/reaction/{message}', [\App\Http\Controllers\User\MessageController::class, 'toggleReaction'])->name('message.reaction');
         Route::post('/{conversation}/game/dice', [\App\Http\Controllers\User\MessageController::class, 'rollDice'])->name('game.dice');
         Route::post('/{conversation}/game/rps/create', [\App\Http\Controllers\User\MessageController::class, 'createRps'])->name('game.rps.create');

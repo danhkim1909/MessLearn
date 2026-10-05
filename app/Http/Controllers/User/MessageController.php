@@ -257,4 +257,43 @@ class MessageController extends Controller
             return response()->json(['error' => 'Đã xảy ra lỗi máy chủ'], 500);
         }
     }
+
+    public function loadMore(Request $request, Conversation $conversation)
+    {
+        try {
+            $userId = Auth::id();
+
+            if (!$conversation->participants()->where('user_id', $userId)->exists()) {
+                return response()->json(['error' => 'Forbidden'], 403);
+            }
+
+            $beforeId = (int) $request->query('before_id');
+            $limit = min(max((int) $request->query('limit', 25), 1), 50);
+
+            if (!$beforeId) {
+                return response()->json(['messages' => [], 'has_more' => false]);
+            }
+
+            $messages = $conversation->messages()
+                ->where('id', '<', $beforeId)
+                ->with(['user', 'replyTo.user', 'quiz.submissions', 'reactions'])
+                ->latest('id')
+                ->take($limit)
+                ->get()
+                ->reverse()
+                ->values();
+
+            $oldestId = $messages->first()?->id;
+            $hasMore = $oldestId ? $conversation->messages()->where('id', '<', $oldestId)->exists() : false;
+
+            return response()->json([
+                'messages' => $messages,
+                'has_more' => $hasMore,
+                'oldest_id' => $oldestId,
+            ]);
+        } catch (Exception $e) {
+            Log::error("Loi khi tai them tin nhan cu: " . $e->getMessage());
+            return response()->json(['error' => 'Da xay ra loi may chu'], 500);
+        }
+    }
 }

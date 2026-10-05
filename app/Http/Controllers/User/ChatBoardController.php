@@ -52,10 +52,27 @@ class ChatBoardController extends Controller
             abort(403);
         }
 
-        $conversation->load(['messages.user', 'messages.replyTo.user', 'messages.quiz.submissions', 'messages.reactions', 'participants.user']);
+        $conversation->load([
+            'participants.user',
+            'messages' => function ($query) {
+                $query->latest('id')
+                    ->take(30)
+                    ->with(['user', 'replyTo.user', 'quiz.submissions', 'reactions']);
+            }
+        ]);
+
+        // Đảo ngược để hiển thị từ cũ đến mới theo chiều dọc
+        $conversation->setRelation('messages', $conversation->messages->reverse()->values());
+
+        $oldestMessageId = $conversation->messages->first()?->id ?? null;
+        $hasMoreMessages = $oldestMessageId
+            ? $conversation->messages()->where('id', '<', $oldestMessageId)->exists()
+            : false;
         
         $data = $this->getSidebarData();
         $data['activeConversation'] = $conversation;
+        $data['hasMoreMessages'] = $hasMoreMessages;
+        $data['oldestMessageId'] = $oldestMessageId;
 
         return view('user.pages.chatboard.index', $data);
     }

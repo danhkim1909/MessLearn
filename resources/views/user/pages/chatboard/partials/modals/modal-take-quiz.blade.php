@@ -1,8 +1,6 @@
-﻿<!-- MODAL: LÀM BÀI TRẮC NGHIỆM / KHẢO SÁT -->
+<!-- MODAL: LÀM BÀI TRẮC NGHIỆM / KHẢO SÁT -->
 <div id="modal-take-quiz" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 w-full h-[90vh] max-w-4xl rounded-3xl shadow-2xl flex flex-col overflow-hidden">
-        
-        <!-- Header -->
         <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3 p-6 shrink-0">
             <div>
                 <h3 id="quiz-run-title" class="font-bold text-lg text-slate-900 dark:text-white">Đang tải...</h3>
@@ -18,11 +16,8 @@
                 </button>
             </div>
         </div>
-
-        <!-- Body -->
         <div class="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-slate-900/30">
             <div class="max-w-2xl mx-auto space-y-6" id="quiz-run-container">
-                <!-- Nội dung câu hỏi sinh bằng JS -->
                 <div class="flex justify-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div></div>
             </div>
             
