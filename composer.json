@@ -10,6 +10,8 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "ext-pcntl": "*",
+        "ext-posix": "*",
         "laravel/framework": "^13.17",
         "laravel/reverb": "^1.0",
         "laravel/tinker": "^3.0"
@@ -78,7 +80,9 @@
     },
     "config": {
         "platform": {
-            "php": "8.3.35"
+            "php": "8.3.35",
+            "ext-pcntl": "8.4",
+            "ext-posix": "8.4"
         },
         "optimize-autoloader": true,
         "preferred-install": "dist",
