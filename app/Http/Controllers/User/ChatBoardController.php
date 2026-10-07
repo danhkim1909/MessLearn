@@ -92,12 +92,19 @@ class ChatBoardController extends Controller
             })
             ->first();
         
+        $activeMeeting = $conversation->meetings()
+            ->whereIn('status', ['ringing', 'ongoing'])
+            ->with(['host'])
+            ->latest('id')
+            ->first();
+
         $data = $this->getSidebarData();
         $data['activeConversation'] = $conversation;
         $data['hasMoreMessages'] = $hasMoreMessages;
         $data['oldestMessageId'] = $oldestMessageId;
         $data['pinnedMessage'] = $pinnedMessage;
         $data['upcomingEvent'] = $upcomingEvent;
+        $data['activeMeeting'] = $activeMeeting;
 
         return view('user.pages.chatboard.index', $data);
     }

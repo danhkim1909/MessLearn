@@ -30,16 +30,58 @@
             </div>
         </div>
 
-        <!-- Cac nut hanh dong tren Header: Goi thoai, Goi video, Tim kiem -->
+        <!-- Cac nut hanh dong tren Header: Goi thoai, Goi video, Phong hoc nhom, Tim kiem -->
         <div class="flex items-center gap-1.5">
-            <button type="button" onclick="startCall('voice')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Goi thoai">
-                <i data-lucide="phone" class="w-5 h-5"></i>
-            </button>
-            <button type="button" onclick="startCall('video')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Goi video va Hop truc tuyen">
-                <i data-lucide="video" class="w-5 h-5"></i>
-            </button>
-            <button type="button" onclick="toggleChatSearch()" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Tim kiem tin nhan">
+            @if($isGroup)
+                <!-- 1. Goi thoai nhom (Do chuong ca nhom) -->
+                <button type="button" onclick="startCall('voice', null, 'call')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Gọi thoại nhóm (Đổ chuông)">
+                    <i data-lucide="phone" class="w-5 h-5"></i>
+                </button>
+                <!-- 2. Goi video nhom (Do chuong ca nhom) -->
+                <button type="button" onclick="startCall('video', null, 'call')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Gọi video nhóm (Đổ chuông)">
+                    <i data-lucide="video" class="w-5 h-5"></i>
+                </button>
+                <!-- 3. Phong hoc truc tuyen (Mo qua lobby, phat banner, giơ tay, chu phong) -->
+                <button type="button" onclick="openMeetingLobby('video')" class="p-2 text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Phòng học & Họp trực tuyến">
+                    <i data-lucide="presentation" class="w-5 h-5"></i>
+                </button>
+            @else
+                <!-- Cuoc goi 1-1 -->
+                <button type="button" onclick="startCall('voice', null, 'call')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Gọi thoại">
+                    <i data-lucide="phone" class="w-5 h-5"></i>
+                </button>
+                <button type="button" onclick="startCall('video', null, 'call')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Gọi video">
+                    <i data-lucide="video" class="w-5 h-5"></i>
+                </button>
+            @endif
+            <button type="button" onclick="toggleChatSearch()" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Tìm kiếm tin nhắn">
                 <i data-lucide="search" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Thanh Banner Phong hoc nhom dang mo (Active Group Meeting Banner) -->
+    @php
+        $hasActiveMeeting = $isGroup && isset($activeMeeting) && in_array($activeMeeting->status, ['ringing', 'ongoing']);
+    @endphp
+    <div id="active-meeting-banner" class="{{ $hasActiveMeeting ? 'flex' : 'hidden' }} items-center justify-between px-6 py-2.5 bg-emerald-500/10 dark:bg-emerald-950/40 border-t border-emerald-500/20 text-xs transition-all z-20" data-room-code="{{ $activeMeeting?->room_code ?? '' }}" data-call-type="{{ $activeMeeting?->type ?? 'video' }}">
+        <div class="flex items-center gap-2.5 min-w-0 flex-1">
+            <div class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0">
+                <i data-lucide="video" class="w-4 h-4 animate-pulse"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5 font-bold text-emerald-900 dark:text-emerald-200 text-xs">
+                    <span>Phòng học nhóm đang diễn ra</span>
+                </div>
+                <div class="flex items-center gap-2 text-[11px] text-emerald-700/90 dark:text-emerald-300/90 mt-0.5">
+                    <span id="active-meeting-host-desc">Chủ phòng: {{ $activeMeeting?->host?->name ?? 'Bạn học' }}</span>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0 ml-3">
+            <button type="button" onclick="openMeetingLobby('video')" class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5">
+                <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
+                <span>Tham gia phòng</span>
             </button>
         </div>
     </div>

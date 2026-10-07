@@ -1,28 +1,60 @@
 <script>
-// --- WebRTC Online Meeting & Screen Sharing Engine ---
+// -------------------------------------------------------------
+// WEBRTC ONLINE MEETING & SCREEN SHARING ENGINE (MESSCALL)
+// HE THONG CUOC GOI VA PHONG HOC NHOM WEBRTC FULL-MESH
+// -------------------------------------------------------------
 (function() {
-    // Trạng thái cuộc gọi
+    // Trang thai cuoc goi va phong hop
     let activeMeetingId = null;
     let activeRoomCode = null;
     let activeCallType = 'video';
+    let activeCallMode = 'call'; // 'call' (do chuong) hoac 'classroom' (phong hoc lobby/banner)
     let localStream = null;
+
+    // Kien truc WebRTC Full-Mesh
+    let peers = {}; // key: remoteUserId -> RTCPeerConnection
+    let remoteStreams = {}; // key: remoteUserId -> MediaStream
+    let remoteUserProfiles = {}; // key: remoteUserId -> { name, avatar }
+    let remoteUserStates = {}; // key: remoteUserId -> { isMutedAudio, isMutedVideo, isHandRaised, isSharingScreen }
+    let pendingIceCandidates = {}; // key: remoteUserId -> Array[RTCIceCandidate]
+
     let screenStream = null;
-    let peerConnection = null;
     let callTimerInterval = null;
+    let ringTimeoutTimer = null;
     let callDurationSeconds = 0;
     let isMutedAudio = false;
     let isMutedVideo = false;
     let isSharingScreen = false;
+    let currentScreenSharerId = null;
+    let currentScreenSharerName = '';
+    let wasCameraActiveBeforeScreenShare = false;
     let incomingCallData = null;
     let isInitiator = false;
+
+    // Trang thai phong hop nhom va phan quyen Host
+    let isGroupMeeting = false;
+    let isMeetingHost = false;
+    let currentHostUserId = null;
+    let isHandRaised = false;
+
+    // Trang thai tuy chon tien cuoc goi (Pre-call Controls)
+    let preCallMutedAudio = false;
+    let preCallMutedVideo = false;
+
+    // Trang thai phong cho phong hoc nhom (Meeting Lobby)
+    let lobbyPreviewStream = null;
+    let lobbyMutedAudio = false;
+    let lobbyMutedVideo = false;
+    let lobbyTargetCallType = 'video';
 
     // Web Audio Ringtone Synth
     let ringtoneAudioContext = null;
     let ringtoneInterval = null;
 
-    const currentConvId = {{ $activeConversation?->id ?? 0 }};
+    let activeConversationId = {{ $activeConversation?->id ?? 'null' }};
     const currentUserId = {{ Auth::id() }};
     const currentUserName = '{{ addslashes(Auth::user()->name) }}';
+    const currentUserAvatar = '{{ Auth::user()->avatar_url ?? "" }}';
 
     const rtcConfig = {
         iceServers: [
@@ -63,7 +95,7 @@
             osc1.stop(ringtoneAudioContext.currentTime + duration);
             osc2.stop(ringtoneAudioContext.currentTime + duration);
         } catch (e) {
-            // Trinh duyet chan autoplay audio
+            // Trinh duyet chan autoplay audio neu chua co tuong tac
         }
     }
 
@@ -87,6 +119,10 @@
         if (ringtoneInterval) {
             clearInterval(ringtoneInterval);
             ringtoneInterval = null;
+        }
+        if (ringTimeoutTimer) {
+            clearTimeout(ringTimeoutTimer);
+            ringTimeoutTimer = null;
         }
     }
 
@@ -112,79 +148,723 @@
         }
     }
 
-    // --- Khoi tao cuoc goi tu Header ---
-    window.startCall = async function(type) {
-        if (!currentConvId) return;
+    // --- Xu ly khi goi khong ai nghe may (45 giay timeout) ---
+    async function handleCallTimeout() {
+        stopRingtone();
+        if (typeof Toastify === 'function') {
+            Toastify({
+                text: 'Nguoi nhan hien khong tra loi cuoc goi.',
+                duration: 4000,
+                style: { background: '#f43f5e', borderRadius: '0.5rem' }
+            }).showToast();
+        }
+        await endCurrentCall();
+    }
+
+    // --- Khoi tao cuoc goi tu Header hoac tham gia tu Lobby ---
+    window.startCall = async function(type, initialMediaOptions = null, callMode = 'call') {
+        if (!activeConversationId) {
+            if (typeof Toastify === 'function') {
+                Toastify({ text: 'Vui long chon mot cuoc tro chuyen de goi.', style: { background: '#f43f5e' } }).showToast();
+            }
+            return;
+        }
 
         activeCallType = type;
+        activeCallMode = callMode || 'call';
         isInitiator = true;
 
         try {
-            // Yeu cau quyen truy cap Micro / Camera
+            // Yeu cau quyen truy cap Micro va Camera
             const constraints = {
                 audio: true,
                 video: type === 'video' ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false
             };
 
             localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            isMutedAudio = false;
-            isMutedVideo = type !== 'video';
+            
+            // Ap dung tuy chon Mic/Cam neu co truyen tu Phong cho (Meeting Lobby)
+            if (initialMediaOptions) {
+                isMutedAudio = !!initialMediaOptions.mutedAudio;
+                isMutedVideo = type === 'video' ? !!initialMediaOptions.mutedVideo : true;
+            } else {
+                isMutedAudio = false;
+                isMutedVideo = type !== 'video';
+            }
+
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.enabled = !isMutedAudio;
+            }
+            const videoTrack = localStream.getVideoTracks()[0];
+            if (videoTrack) {
+                videoTrack.enabled = !isMutedVideo;
+            }
 
             // Hien thi modal phong hop
             openMeetingRoomModal();
             attachLocalMediaStream(localStream);
             updateMediaControlsUI();
+            updateAdaptiveVideoGrid();
+
+            const meetingTitleEl = document.getElementById('meeting-room-title');
+            if (meetingTitleEl) {
+                if (activeCallMode === 'classroom') {
+                    meetingTitleEl.innerText = 'Phòng học nhóm trực tuyến';
+                } else {
+                    meetingTitleEl.innerText = (activeCallType === 'voice') ? 'Cuộc gọi thoại' : 'Cuộc gọi video';
+                }
+            }
 
             const statusBadge = document.getElementById('meeting-status-badge');
             if (statusBadge) {
-                statusBadge.innerText = 'Dang do chuong...';
-                statusBadge.className = 'text-amber-400 font-medium';
+                statusBadge.innerText = (activeCallMode === 'classroom') ? 'Đang diễn ra' : 'Đang đổ chuông...';
+                statusBadge.className = (activeCallMode === 'classroom') ? 'text-emerald-400 font-medium' : 'text-amber-400 font-medium';
             }
 
-            startOutgoingRingtone();
+            if (activeCallMode !== 'classroom') {
+                startOutgoingRingtone();
+                ringTimeoutTimer = setTimeout(handleCallTimeout, 45000);
+            } else {
+                startCallTimer();
+            }
 
-            // Goi API khoi tao meeting
-            const res = await fetch(`/app/conversation/${currentConvId}/meeting/start`, {
+            // Goi API khoi tao hoac tham gia meeting tren backend
+            const res = await fetch(`/app/conversation/${activeConversationId}/meeting/start`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
                 },
-                body: JSON.stringify({ type: type })
+                body: JSON.stringify({ type: type, mode: activeCallMode })
             });
 
             const data = await res.json();
             if (res.ok && data.success) {
-                activeMeetingId = data.meeting.id;
+                activeMeetingId = data.meeting?.id;
                 activeRoomCode = data.room_code;
-                initPeerConnection();
+                isGroupMeeting = !!data.is_group;
+                activeCallMode = data.mode || activeCallMode;
+                isMeetingHost = !!data.is_host;
+                currentHostUserId = data.host_id || null;
+
+                if (isGroupMeeting && activeCallMode === 'classroom') {
+                    stopRingtone();
+                    clearTimeout(ringTimeoutTimer);
+                    startCallTimer();
+                }
+
+                updateMeetingRoleUI();
+
+                // Ket noi Mesh voi tat ca thanh vien dang co san trong phong
+                if (data.existing_participants && Array.isArray(data.existing_participants)) {
+                    data.existing_participants.forEach(p => {
+                        initiateConnectionWithPeer(p.id, { name: p.name, avatar: p.avatar });
+                    });
+                }
             } else {
-                Toastify({ text: data.message || 'Khong the khoi tao cuoc goi', style: { background: '#f43f5e' } }).showToast();
-                endCurrentCall();
+                if (typeof Toastify === 'function') {
+                    Toastify({ text: data.message || 'Khong the khoi tao cuoc goi.', style: { background: '#f43f5e' } }).showToast();
+                }
+                cleanupCall();
             }
         } catch (err) {
             console.error('Loi truy cap camera/micro:', err);
-            Toastify({ text: 'Vui long cap quyen Camera va Micro de bat dau cuoc goi.', style: { background: '#f43f5e' } }).showToast();
+            if (typeof Toastify === 'function') {
+                Toastify({ text: 'Vui long cap quyen Camera va Micro de bat dau cuoc goi.', style: { background: '#f43f5e' } }).showToast();
+            }
             cleanupCall();
         }
+    };
+
+    // --- Cap nhat giao dien vai tro (Host vs Member) va Cuoc goi 1-1 ---
+    function updateMeetingRoleUI() {
+        const roleBadge = document.getElementById('meeting-user-role-badge');
+        const roleText = document.getElementById('meeting-role-text');
+        const localCrown = document.getElementById('local-crown-badge');
+        const localHand = document.getElementById('local-hand-badge');
+        const btnHand = document.getElementById('btn-call-hand');
+        const btnHostMuteAll = document.getElementById('btn-host-mute-all');
+        const btnEndText = document.getElementById('btn-call-end-text');
+
+        if (isGroupMeeting) {
+            // Phong hop nhom truc tuyen
+            if (roleBadge) {
+                roleBadge.classList.remove('hidden');
+                roleBadge.classList.add('inline-flex');
+                if (isMeetingHost) {
+                    roleBadge.className = 'inline-flex items-center gap-1 ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30';
+                    if (roleText) roleText.innerText = 'Chủ phòng';
+                } else {
+                    roleBadge.className = 'inline-flex items-center gap-1 ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700';
+                    if (roleText) roleText.innerText = 'Thành viên';
+                }
+            }
+
+            if (localCrown) {
+                if (isMeetingHost) localCrown.classList.remove('hidden');
+                else localCrown.classList.add('hidden');
+            }
+
+            if (btnHand) {
+                btnHand.classList.remove('hidden');
+                if (isHandRaised) {
+                    btnHand.className = 'w-11 h-11 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center transition-all active:scale-95 shadow-lg shadow-amber-500/30';
+                } else {
+                    btnHand.className = 'w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all active:scale-95';
+                }
+            }
+
+            if (localHand) {
+                if (isHandRaised) localHand.classList.remove('hidden');
+                else localHand.classList.add('hidden');
+            }
+
+            if (btnHostMuteAll) {
+                if (isMeetingHost) btnHostMuteAll.classList.remove('hidden');
+                else btnHostMuteAll.classList.add('hidden');
+            }
+
+            if (btnEndText) {
+                btnEndText.innerText = isMeetingHost ? 'Rời / Đóng' : 'Rời phòng';
+            }
+        } else {
+            // Cuoc goi ban be 1-1
+            if (roleBadge) {
+                roleBadge.classList.add('hidden');
+                roleBadge.classList.remove('inline-flex');
+            }
+            if (localCrown) localCrown.classList.add('hidden');
+            if (localHand) localHand.classList.add('hidden');
+            if (btnHand) btnHand.classList.add('hidden');
+            if (btnHostMuteAll) btnHostMuteAll.classList.add('hidden');
+            if (btnEndText) btnEndText.innerText = 'Kết thúc';
+        }
+
+        // Cap nhat hien thi nut quan ly Host tren the cua cac thanh vien
+        const hostActionButtons = document.querySelectorAll('[id^="remote-host-actions-"]');
+        hostActionButtons.forEach(el => {
+            el.classList.toggle('hidden', !(isGroupMeeting && isMeetingHost));
+        });
+
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    }
+
+    // --- Don dep khung Spotlight chia se man hinh dung chung ---
+    function teardownScreenShareSpotlight() {
+        const prevSharerId = currentScreenSharerId;
+        currentScreenSharerId = null;
+        currentScreenSharerName = '';
+
+        const spotlightContainer = document.getElementById('screen-share-spotlight');
+        const mirrorPlaceholder = document.getElementById('screen-mirror-placeholder');
+        const screenVideo = document.getElementById('screen-share-video');
+
+        if (spotlightContainer) spotlightContainer.classList.add('hidden');
+        if (mirrorPlaceholder) mirrorPlaceholder.classList.add('hidden');
+        if (screenVideo) screenVideo.srcObject = null;
+
+        // Khoi phuc the camera cua nguoi vua dung chia se
+        if (prevSharerId && Number(prevSharerId) !== Number(currentUserId)) {
+            renderOrUpdateParticipantCard(prevSharerId);
+        }
+
+        updateMediaControlsUI();
+    }
+
+    // --- Cap nhat luoi video thich ung (Adaptive Video Grid) ---
+    function updateAdaptiveVideoGrid() {
+        const gridEl = document.getElementById('meeting-video-grid');
+        const waitingBadge = document.getElementById('waiting-peer-badge');
+        if (!gridEl) return;
+
+        const peerCount = Object.keys(peers).length;
+        const totalCount = peerCount + 1; // 1 local card + so the remote
+
+        // Reset tat ca class cot cu
+        gridEl.classList.remove('grid-cols-1', 'grid-cols-2', 'md:grid-cols-2', 'md:grid-cols-3', 'lg:grid-cols-4');
+
+        if (totalCount <= 1) {
+            // Chi co 1 minh trong phong: Bung full 100% va hien badge cho
+            gridEl.classList.add('grid-cols-1');
+            if (waitingBadge) {
+                waitingBadge.classList.remove('hidden');
+                waitingBadge.classList.add('flex');
+            }
+        } else {
+            // Da co thanh vien khac tham gia: An badge cho
+            if (waitingBadge) {
+                waitingBadge.classList.add('hidden');
+                waitingBadge.classList.remove('flex');
+            }
+
+            if (totalCount === 2) {
+                gridEl.classList.add('grid-cols-1', 'md:grid-cols-2');
+            } else if (totalCount <= 4) {
+                gridEl.classList.add('grid-cols-2', 'md:grid-cols-2');
+            } else {
+                gridEl.classList.add('grid-cols-2', 'md:grid-cols-3');
+            }
+        }
+    }
+
+    // --- Render hoac cap nhat the Camera cua tung thanh vien Remote trong Mesh ---
+    function renderOrUpdateParticipantCard(userId) {
+        const rId = Number(userId);
+        if (!rId || rId === Number(currentUserId)) return;
+
+        const gridEl = document.getElementById('meeting-video-grid');
+        if (!gridEl) return;
+
+        const profile = remoteUserProfiles[rId] || { name: 'Thành viên', avatar: null };
+        const userState = remoteUserStates[rId] || { isMutedAudio: false, isMutedVideo: (activeCallType === 'voice') };
+        const isHost = (currentHostUserId && Number(currentHostUserId) === rId);
+        const isHand = !!userState.isHandRaised;
+        const isMuted = !!userState.isMutedAudio;
+
+        let card = document.getElementById('remote-card-' + rId);
+        if (!card) {
+            card = document.createElement('div');
+            card.id = 'remote-card-' + rId;
+            card.className = 'relative bg-slate-900/90 rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center shadow-lg transition-all duration-300 min-h-[180px]';
+            card.innerHTML = `
+                <video id="remote-video-${rId}" autoplay playsinline class="w-full h-full object-cover hidden"></video>
+                <audio id="remote-audio-${rId}" autoplay playsinline class="hidden"></audio>
+                
+                <div id="remote-fallback-${rId}" class="flex flex-col items-center gap-3">
+                    <div class="w-24 h-24 rounded-full bg-slate-800 border-2 border-slate-700 text-slate-200 flex items-center justify-center font-extrabold text-3xl shadow-inner overflow-hidden">
+                        ${profile.avatar ? `<img src="${profile.avatar}" class="w-full h-full object-cover" alt="${profile.name}">` : `<span>${profile.name ? profile.name.charAt(0).toUpperCase() : 'U'}</span>`}
+                    </div>
+                    <p id="remote-name-label-${rId}" class="font-bold text-xs text-slate-300 text-center max-w-[200px] truncate">${profile.name} (Camera đang tắt)</p>
+                </div>
+
+                <div class="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-xs font-semibold px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-2 z-10">
+                    <span id="remote-crown-${rId}" class="${isHost ? '' : 'hidden'} text-amber-400" title="Chủ phòng">
+                        <i data-lucide="crown" class="w-3.5 h-3.5"></i>
+                    </span>
+                    <span class="truncate max-w-[120px]">${profile.name}</span>
+                    <span id="remote-hand-${rId}" class="${isHand ? '' : 'hidden'} text-amber-400 animate-bounce" title="Đang giơ tay phát biểu">
+                        <i data-lucide="hand" class="w-3.5 h-3.5 fill-amber-400/30"></i>
+                    </span>
+                    <span id="remote-mic-${rId}" class="${isMuted ? 'text-rose-400' : 'text-emerald-400'}">
+                        <i data-lucide="${isMuted ? 'mic-off' : 'mic'}" class="w-3.5 h-3.5"></i>
+                    </span>
+                </div>
+
+                <div id="remote-host-actions-${rId}" class="${(isGroupMeeting && isMeetingHost) ? '' : 'hidden'} absolute top-3 right-3 z-10">
+                    <button type="button" onclick="hostMuteRemoteParticipant(${rId})" 
+                            class="p-2 rounded-xl bg-slate-800/80 hover:bg-rose-600/90 text-white backdrop-blur-md border border-slate-700 transition-all text-xs flex items-center gap-1 shadow-md"
+                            title="Tắt micro thành viên này">
+                        <i data-lucide="mic-off" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+            `;
+            gridEl.appendChild(card);
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
+        } else {
+            // Cap nhat badge thong tin tren the da co
+            const crownEl = document.getElementById('remote-crown-' + rId);
+            if (crownEl) crownEl.classList.toggle('hidden', !isHost);
+
+            const handEl = document.getElementById('remote-hand-' + rId);
+            if (handEl) handEl.classList.toggle('hidden', !isHand);
+
+            const micEl = document.getElementById('remote-mic-' + rId);
+            if (micEl) {
+                micEl.className = isMuted ? 'text-rose-400' : 'text-emerald-400';
+                micEl.innerHTML = `<i data-lucide="${isMuted ? 'mic-off' : 'mic'}" class="w-3.5 h-3.5"></i>`;
+            }
+
+            const hostAction = document.getElementById('remote-host-actions-' + rId);
+            if (hostAction) hostAction.classList.toggle('hidden', !(isGroupMeeting && isMeetingHost));
+
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
+        }
+
+        // Gan luong MediaStream vao the video va the audio doc lap
+        const stream = remoteStreams[rId];
+        const videoEl = document.getElementById('remote-video-' + rId);
+        const audioEl = document.getElementById('remote-audio-' + rId);
+        const fallbackEl = document.getElementById('remote-fallback-' + rId);
+
+        if (audioEl && stream) {
+            if (audioEl.srcObject !== stream) {
+                audioEl.srcObject = stream;
+            }
+            audioEl.play().catch(e => console.warn('Audio play blocked:', e));
+        }
+
+        if (videoEl && fallbackEl) {
+            // Neu thanh vien nay dang chia se man hinh vao Spotlight
+            if (currentScreenSharerId && Number(currentScreenSharerId) === rId) {
+                videoEl.srcObject = null;
+                videoEl.classList.add('hidden');
+                fallbackEl.classList.remove('hidden');
+            } else if (stream && activeCallType === 'video' && !userState.isMutedVideo) {
+                if (videoEl.srcObject !== stream) {
+                    videoEl.srcObject = stream;
+                }
+                videoEl.classList.remove('hidden');
+                fallbackEl.classList.add('hidden');
+                videoEl.play().catch(e => console.warn('Video play blocked:', e));
+            } else {
+                videoEl.classList.add('hidden');
+                fallbackEl.classList.remove('hidden');
+            }
+        }
+
+        updateAdaptiveVideoGrid();
+    }
+
+    // --- Xoa thanh vien khoi luoi va don dep ket noi ---
+    function removeParticipant(userId) {
+        const rId = Number(userId);
+        if (!rId) return;
+
+        if (peers[rId]) {
+            peers[rId].close();
+            delete peers[rId];
+        }
+        delete remoteStreams[rId];
+        delete remoteUserProfiles[rId];
+        delete pendingIceCandidates[rId];
+        delete remoteUserStates[rId];
+
+        const card = document.getElementById('remote-card-' + rId);
+        if (card) {
+            card.remove();
+        }
+
+        if (currentScreenSharerId && Number(currentScreenSharerId) === rId) {
+            teardownScreenShareSpotlight();
+        }
+
+        updateAdaptiveVideoGrid();
+    }
+
+    // --- Gio tay / Ha tay phat bieu ---
+    window.toggleRaiseHand = function() {
+        if (!isGroupMeeting) return;
+        isHandRaised = !isHandRaised;
+        updateMeetingRoleUI();
+        sendSignal(isHandRaised ? 'raise_hand' : 'lower_hand', {
+            userId: currentUserId,
+            userName: currentUserName
+        });
+        if (typeof Toastify === 'function') {
+            Toastify({
+                text: isHandRaised ? 'Bạn đã giơ tay phát biểu.' : 'Bạn đã hạ tay.',
+                style: { background: isHandRaised ? '#f59e0b' : '#64748b', borderRadius: '0.5rem' },
+                duration: 2500
+            }).showToast();
+        }
+    };
+
+    // --- Chu phong tat mic doi phuong ---
+    window.hostMuteRemoteParticipant = function(targetUserId) {
+        if (!isGroupMeeting || !isMeetingHost || !targetUserId) return;
+        sendSignal('host_mute_user', {
+            hostId: currentUserId,
+            hostName: currentUserName
+        }, targetUserId);
+        if (typeof Toastify === 'function') {
+            Toastify({
+                text: 'Đã yêu cầu tắt micro thành viên.',
+                style: { background: '#0284c7', borderRadius: '0.5rem' },
+                duration: 2500
+            }).showToast();
+        }
+    };
+
+    // --- Chu phong tat mic ca phong ---
+    window.hostMuteAllParticipants = function() {
+        if (!isGroupMeeting || !isMeetingHost) return;
+        sendSignal('host_mute_all', {
+            hostId: currentUserId,
+            hostName: currentUserName
+        });
+        if (typeof Toastify === 'function') {
+            Toastify({
+                text: 'Đã tắt micro toàn bộ thành viên trong phòng.',
+                style: { background: '#0284c7', borderRadius: '0.5rem' },
+                duration: 2500
+            }).showToast();
+        }
+    };
+
+    // --- Xu ly khi bam nut Do roi phong / ket thuc ---
+    window.handleCallEndButtonClick = function() {
+        if (isGroupMeeting && isMeetingHost) {
+            const modalConfirm = document.getElementById('modal-host-leave-confirm');
+            if (modalConfirm) {
+                modalConfirm.classList.remove('hidden');
+                modalConfirm.classList.add('flex');
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    lucide.createIcons();
+                }
+            }
+        } else {
+            endCurrentCall(false);
+        }
+    };
+
+    window.closeHostLeaveConfirmModal = function() {
+        const modalConfirm = document.getElementById('modal-host-leave-confirm');
+        if (modalConfirm) {
+            modalConfirm.classList.add('hidden');
+            modalConfirm.classList.remove('flex');
+        }
+    };
+
+    window.confirmHostLeave = async function(endForAll) {
+        closeHostLeaveConfirmModal();
+        await endCurrentCall(endForAll);
+    };
+
+    // --- PHONG CHO CHUAN BI PHONG HOC NHOM (MEETING LOBBY) ---
+    window.openMeetingLobby = async function(type) {
+        if (!activeConversationId) {
+            if (typeof Toastify === 'function') {
+                Toastify({ text: 'Vui long chon mot cuoc tro chuyen de vao phong.', style: { background: '#f43f5e' } }).showToast();
+            }
+            return;
+        }
+
+        lobbyTargetCallType = type;
+        lobbyMutedAudio = false;
+        lobbyMutedVideo = (type === 'voice');
+
+        const modalLobby = document.getElementById('modal-meeting-lobby');
+        const previewVideo = document.getElementById('lobby-preview-video');
+        const fallback = document.getElementById('lobby-camera-fallback');
+        const avatarLetter = document.getElementById('lobby-avatar-letter');
+        const btnCam = document.getElementById('btn-lobby-cam');
+
+        if (avatarLetter) {
+            avatarLetter.innerText = currentUserName ? currentUserName.charAt(0).toUpperCase() : 'U';
+        }
+
+        if (modalLobby) {
+            modalLobby.classList.remove('hidden');
+        }
+
+        if (type === 'voice') {
+            if (btnCam) btnCam.classList.add('hidden');
+            if (fallback) fallback.classList.remove('hidden');
+            if (previewVideo) previewVideo.classList.add('hidden');
+        } else {
+            if (btnCam) btnCam.classList.remove('hidden');
+            try {
+                lobbyPreviewStream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 640 }, height: { ideal: 360 } },
+                    audio: false
+                });
+                if (previewVideo) {
+                    previewVideo.srcObject = lobbyPreviewStream;
+                    previewVideo.classList.remove('hidden');
+                }
+                if (fallback) fallback.classList.add('hidden');
+            } catch (err) {
+                console.warn('Khong the bat camera preview phong cho:', err);
+                lobbyMutedVideo = true;
+                if (previewVideo) previewVideo.classList.add('hidden');
+                if (fallback) fallback.classList.remove('hidden');
+            }
+        }
+
+        updateLobbyUI();
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    };
+
+    window.toggleLobbyMic = function() {
+        lobbyMutedAudio = !lobbyMutedAudio;
+        updateLobbyUI();
+    };
+
+    window.toggleLobbyCam = function() {
+        if (lobbyTargetCallType === 'voice') return;
+        lobbyMutedVideo = !lobbyMutedVideo;
+
+        const previewVideo = document.getElementById('lobby-preview-video');
+        const fallback = document.getElementById('lobby-camera-fallback');
+
+        if (lobbyPreviewStream) {
+            const track = lobbyPreviewStream.getVideoTracks()[0];
+            if (track) {
+                track.enabled = !lobbyMutedVideo;
+            }
+        }
+
+        if (lobbyMutedVideo) {
+            if (previewVideo) previewVideo.classList.add('hidden');
+            if (fallback) fallback.classList.remove('hidden');
+        } else {
+            if (previewVideo) previewVideo.classList.remove('hidden');
+            if (fallback) fallback.classList.add('hidden');
+        }
+
+        updateLobbyUI();
+    };
+
+    function updateLobbyUI() {
+        const btnMic = document.getElementById('btn-lobby-mic');
+        const iconMic = document.getElementById('icon-lobby-mic');
+        const textMic = document.getElementById('text-lobby-mic');
+        const micBadgeIcon = document.getElementById('lobby-mic-badge-icon');
+        const micBadgeText = document.getElementById('lobby-mic-badge-text');
+
+        if (btnMic && iconMic && textMic) {
+            if (lobbyMutedAudio) {
+                btnMic.className = 'flex-1 py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20';
+                iconMic.setAttribute('data-lucide', 'mic-off');
+                textMic.innerText = 'Micro: Tắt';
+                if (micBadgeIcon) micBadgeIcon.className = 'text-rose-400';
+                if (micBadgeText) micBadgeText.innerText = 'Micro đang tắt';
+            } else {
+                btnMic.className = 'flex-1 py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20';
+                iconMic.setAttribute('data-lucide', 'mic');
+                textMic.innerText = 'Micro: Bật';
+                if (micBadgeIcon) micBadgeIcon.className = 'text-emerald-400';
+                if (micBadgeText) micBadgeText.innerText = 'Micro sẵn sàng';
+            }
+        }
+
+        const btnCam = document.getElementById('btn-lobby-cam');
+        const iconCam = document.getElementById('icon-lobby-cam');
+        const textCam = document.getElementById('text-lobby-cam');
+
+        if (btnCam && iconCam && textCam) {
+            if (lobbyMutedVideo) {
+                btnCam.className = 'flex-1 py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20';
+                iconCam.setAttribute('data-lucide', 'video-off');
+                textCam.innerText = 'Camera: Tắt';
+            } else {
+                btnCam.className = 'flex-1 py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/20';
+                iconCam.setAttribute('data-lucide', 'video');
+                textCam.innerText = 'Camera: Bật';
+            }
+        }
+
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    }
+
+    window.closeMeetingLobby = function() {
+        if (lobbyPreviewStream) {
+            lobbyPreviewStream.getTracks().forEach(t => t.stop());
+            lobbyPreviewStream = null;
+        }
+        const modalLobby = document.getElementById('modal-meeting-lobby');
+        if (modalLobby) {
+            modalLobby.classList.add('hidden');
+        }
+    };
+
+    window.confirmJoinFromLobby = function() {
+        const options = {
+            mutedAudio: lobbyMutedAudio,
+            mutedVideo: lobbyMutedVideo
+        };
+        closeMeetingLobby();
+        startCall(lobbyTargetCallType, options, 'classroom');
+    };
+
+    // --- Dieu khien tuy chon tien cuoc goi (Pre-call Controls) ---
+    function updatePreCallUI() {
+        const btnMic = document.getElementById('btn-precall-mic');
+        const iconMic = document.getElementById('icon-precall-mic');
+        const textMic = document.getElementById('text-precall-mic');
+
+        if (btnMic && iconMic && textMic) {
+            if (preCallMutedAudio) {
+                btnMic.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30 transition-all active:scale-95 hover:bg-rose-500/20';
+                iconMic.setAttribute('data-lucide', 'mic-off');
+                textMic.innerText = 'Mic: Tắt';
+            } else {
+                btnMic.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 transition-all active:scale-95 hover:bg-emerald-500/20';
+                iconMic.setAttribute('data-lucide', 'mic');
+                textMic.innerText = 'Mic: Bật';
+            }
+        }
+
+        const btnCam = document.getElementById('btn-precall-cam');
+        const iconCam = document.getElementById('icon-precall-cam');
+        const textCam = document.getElementById('text-precall-cam');
+
+        if (btnCam && iconCam && textCam) {
+            if (activeCallType === 'voice') {
+                btnCam.classList.add('hidden');
+            } else {
+                btnCam.classList.remove('hidden');
+                if (preCallMutedVideo) {
+                    btnCam.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30 transition-all active:scale-95 hover:bg-rose-500/20';
+                    iconCam.setAttribute('data-lucide', 'video-off');
+                    textCam.innerText = 'Camera: Tắt';
+                } else {
+                    btnCam.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 transition-all active:scale-95 hover:bg-indigo-500/20';
+                    iconCam.setAttribute('data-lucide', 'video');
+                    textCam.innerText = 'Camera: Bật';
+                }
+            }
+        }
+
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    }
+
+    window.togglePreCallMic = function() {
+        preCallMutedAudio = !preCallMutedAudio;
+        updatePreCallUI();
+    };
+
+    window.togglePreCallCam = function() {
+        preCallMutedVideo = !preCallMutedVideo;
+        updatePreCallUI();
     };
 
     // --- Xu ly khi co cuoc goi den ---
     function handleIncomingCall(data) {
         incomingCallData = data;
+        activeConversationId = data.conversationId;
         activeRoomCode = data.roomCode;
         activeCallType = data.callType;
 
+        preCallMutedAudio = false;
+        preCallMutedVideo = false;
+
         const nameEl = document.getElementById('incoming-call-name');
-        const typeLabel = document.getElementById('incoming-call-type-label');
         const avatarEl = document.getElementById('incoming-call-avatar');
+        const badgeContainer = document.getElementById('incoming-call-badge-container');
+        const badgeIcon = document.getElementById('incoming-call-badge-icon');
+        const badgeText = document.getElementById('incoming-call-badge-text');
+        const pulse1 = document.getElementById('incoming-call-pulse-1');
+        const pulse2 = document.getElementById('incoming-call-pulse-2');
 
         if (nameEl) nameEl.innerText = data.senderName;
-        if (typeLabel) {
-            typeLabel.innerText = data.callType === 'voice' 
-                ? 'Cuoc goi thoai dang den...' 
-                : 'Cuoc goi video dang den...';
+
+        if (data.callType === 'voice') {
+            if (badgeContainer) badgeContainer.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800';
+            if (badgeIcon) badgeIcon.setAttribute('data-lucide', 'phone');
+            if (badgeText) badgeText.innerText = 'Cuộc gọi thoại đến';
+            if (pulse1) pulse1.className = 'absolute inset-0 rounded-full bg-emerald-500/20 animate-ping';
+            if (pulse2) pulse2.className = 'absolute inset-1 rounded-full bg-emerald-500/30 animate-pulse';
+        } else {
+            if (badgeContainer) badgeContainer.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800';
+            if (badgeIcon) badgeIcon.setAttribute('data-lucide', 'video');
+            if (badgeText) badgeText.innerText = 'Cuộc gọi video đến';
+            if (pulse1) pulse1.className = 'absolute inset-0 rounded-full bg-indigo-500/20 animate-ping';
+            if (pulse2) pulse2.className = 'absolute inset-1 rounded-full bg-indigo-500/30 animate-pulse';
         }
 
         if (avatarEl) {
@@ -195,8 +875,14 @@
             }
         }
 
+        updatePreCallUI();
+
         const modalIncoming = document.getElementById('modal-incoming-call');
         if (modalIncoming) modalIncoming.classList.remove('hidden');
+
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
 
         startIncomingRingtone();
     }
@@ -210,6 +896,7 @@
         if (!incomingCallData) return;
 
         isInitiator = false;
+
         try {
             const constraints = {
                 audio: true,
@@ -217,8 +904,22 @@
             };
 
             localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            isMutedAudio = false;
-            isMutedVideo = activeCallType !== 'video';
+
+            isMutedAudio = preCallMutedAudio;
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.enabled = !isMutedAudio;
+            }
+
+            if (activeCallType === 'video') {
+                isMutedVideo = preCallMutedVideo;
+                const videoTrack = localStream.getVideoTracks()[0];
+                if (videoTrack) {
+                    videoTrack.enabled = !isMutedVideo;
+                }
+            } else {
+                isMutedVideo = true;
+            }
 
             openMeetingRoomModal();
             attachLocalMediaStream(localStream);
@@ -226,18 +927,80 @@
 
             const statusBadge = document.getElementById('meeting-status-badge');
             if (statusBadge) {
-                statusBadge.innerText = 'Dang ket noi...';
+                statusBadge.innerText = 'Đang diễn ra';
                 statusBadge.className = 'text-emerald-400 font-medium';
             }
 
-            initPeerConnection();
+            isGroupMeeting = !!incomingCallData?.payload?.is_group;
+            activeCallMode = incomingCallData?.payload?.mode || 'call';
+            isMeetingHost = false;
+            currentHostUserId = incomingCallData?.payload?.host_id || null;
+            isHandRaised = false;
+            updateMeetingRoleUI();
+            updateAdaptiveVideoGrid();
 
-            // Gui tin hieu accept_call
-            await sendSignal('accept_call', { accepted: true });
+            const meetingTitleEl = document.getElementById('meeting-room-title');
+            if (meetingTitleEl) {
+                if (isGroupMeeting) {
+                    meetingTitleEl.innerText = incomingCallData?.payload?.title || 'Phòng học nhóm trực tuyến';
+                } else {
+                    meetingTitleEl.innerText = (activeCallType === 'voice') ? 'Cuộc gọi thoại' : 'Cuộc gọi video';
+                }
+            }
+
             startCallTimer();
+
+            // Luu ho so nguoi goi
+            const callerId = incomingCallData.senderId;
+            if (callerId) {
+                remoteUserProfiles[callerId] = {
+                    name: incomingCallData.senderName,
+                    avatar: incomingCallData.senderAvatar
+                };
+            }
+
+            // Gui tin hieu accept_call sang phia nguoi goi de dung chuong cho doi
+            await sendSignal('accept_call', { accepted: true }, callerId);
+
+            // Tham gia phong tren backend va lay danh sach existing_participants
+            const res = await fetch(`/app/conversation/${activeConversationId}/meeting/start`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                },
+                body: JSON.stringify({ type: activeCallType, mode: activeCallMode })
+            });
+
+            const data = await res.json();
+            if (res.ok && data.success) {
+                activeMeetingId = data.meeting?.id;
+                activeRoomCode = data.room_code;
+                if (data.existing_participants && Array.isArray(data.existing_participants)) {
+                    data.existing_participants.forEach(p => {
+                        initiateConnectionWithPeer(p.id, { name: p.name, avatar: p.avatar });
+                    });
+                } else if (callerId) {
+                    initiateConnectionWithPeer(callerId, {
+                        name: incomingCallData.senderName,
+                        avatar: incomingCallData.senderAvatar
+                    });
+                }
+            } else if (callerId) {
+                initiateConnectionWithPeer(callerId, {
+                    name: incomingCallData.senderName,
+                    avatar: incomingCallData.senderAvatar
+                });
+            }
+
+            // Thong bao ngay trang thai Mic/Cam ban dau sang cho cac thanh vien
+            sendSignal('media_state_changed', { isMutedAudio, isMutedVideo, isSharingScreen });
         } catch (err) {
             console.error('Loi chap nhan cuoc goi:', err);
-            Toastify({ text: 'Khong the truy cap thiet bi micro/camera.', style: { background: '#f43f5e' } }).showToast();
+            if (typeof Toastify === 'function') {
+                Toastify({ text: 'Khong the truy cap thiet bi Micro hoac Camera.', style: { background: '#f43f5e' } }).showToast();
+            }
             rejectIncomingCall();
         }
     };
@@ -249,143 +1012,259 @@
         if (modalIncoming) modalIncoming.classList.add('hidden');
 
         if (incomingCallData) {
-            await fetch(`/app/conversation/${currentConvId}/meeting/reject`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                },
-                body: JSON.stringify({
-                    room_code: incomingCallData.roomCode,
-                    call_type: incomingCallData.callType
-                })
-            });
+            const convId = incomingCallData.conversationId || activeConversationId;
+            try {
+                await fetch(`/app/conversation/${convId}/meeting/reject`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    },
+                    body: JSON.stringify({
+                        room_code: incomingCallData.roomCode,
+                        call_type: incomingCallData.callType
+                    })
+                });
+            } catch (e) {
+                console.error('Loi reject:', e);
+            }
         }
         incomingCallData = null;
     };
 
-    // --- Khoi tao WebRTC Peer Connection ---
-    function initPeerConnection() {
-        if (peerConnection) {
-            peerConnection.close();
+    // -------------------------------------------------------------
+    // WEBRTC FULL-MESH CORE ENGINES
+    // -------------------------------------------------------------
+
+    // Tao hoac lay PeerConnection tuong ung voi tung thanh vien remote
+    function getOrCreatePeerConnection(remoteUserId) {
+        const rId = Number(remoteUserId);
+        if (peers[rId]) {
+            return peers[rId];
         }
 
-        peerConnection = new RTCPeerConnection(rtcConfig);
+        const pc = new RTCPeerConnection(rtcConfig);
+        peers[rId] = pc;
+        pendingIceCandidates[rId] = pendingIceCandidates[rId] || [];
 
-        // Them cac track tu local stream vao ket noi
+        // Nap track tu localStream vao ket noi
         if (localStream) {
             localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
+                pc.addTrack(track, localStream);
             });
         }
 
-        // Lang nghe Remote Track den tu doi phuong
-        peerConnection.ontrack = (event) => {
-            const remoteVideo = document.getElementById('remote-video');
-            const remoteFallback = document.getElementById('remote-video-fallback');
+        // Neu dang chia se man hinh, thay the video track bang screen track
+        if (isSharingScreen && screenStream) {
+            const screenTrack = screenStream.getVideoTracks()[0];
+            if (screenTrack) {
+                const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (sender) {
+                    sender.replaceTrack(screenTrack);
+                }
+            }
+        }
 
-            if (remoteVideo && event.streams[0]) {
-                remoteVideo.srcObject = event.streams[0];
-                remoteVideo.classList.remove('hidden');
-                if (remoteFallback) remoteFallback.classList.add('hidden');
+        // Lang nghe Remote Track tu thanh vien nay
+        pc.ontrack = (event) => {
+            let stream = remoteStreams[rId];
+            if (!stream) {
+                stream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream();
+                remoteStreams[rId] = stream;
+            }
+
+            if (event.streams && event.streams[0]) {
+                remoteStreams[rId] = event.streams[0];
+                stream = remoteStreams[rId];
+            } else {
+                if (!stream.getTracks().find(t => t.id === event.track.id)) {
+                    stream.addTrack(event.track);
+                }
+            }
+
+            renderOrUpdateParticipantCard(rId);
+
+            // Neu thanh vien nay dang chia se man hinh, nap luong vao video spotlight
+            if (currentScreenSharerId && Number(currentScreenSharerId) === rId) {
+                const screenVideo = document.getElementById('screen-share-video');
+                if (screenVideo) {
+                    screenVideo.muted = true;
+                    screenVideo.srcObject = stream;
+                    const playOnTrack = () => {
+                        if (screenVideo.paused) {
+                            screenVideo.play().catch(e => console.warn('Screen video play retry blocked:', e));
+                        }
+                    };
+                    screenVideo.onloadedmetadata = playOnTrack;
+                    event.track.onunmute = playOnTrack;
+                    playOnTrack();
+                }
             }
 
             const statusBadge = document.getElementById('meeting-status-badge');
             if (statusBadge) {
-                statusBadge.innerText = 'Da ket noi';
+                statusBadge.innerText = 'Đang diễn ra';
                 statusBadge.className = 'text-emerald-400 font-medium';
             }
         };
 
-        // Lang nghe ICE Candidate va gui sang doi phuong
-        peerConnection.onicecandidate = (event) => {
+        // Lang nghe ICE Candidate va gui chi dinh den remoteUserId
+        pc.onicecandidate = (event) => {
             if (event.candidate) {
-                sendSignal('webrtc_ice_candidate', { candidate: event.candidate });
+                sendSignal('webrtc_ice_candidate', { candidate: event.candidate }, rId);
             }
         };
 
-        peerConnection.onconnectionstatechange = () => {
-            if (!peerConnection) return;
-            const state = peerConnection.connectionState;
-            const statusBadge = document.getElementById('meeting-status-badge');
-
+        pc.onconnectionstatechange = () => {
+            const state = pc.connectionState;
             if (state === 'connected') {
-                if (statusBadge) {
-                    statusBadge.innerText = 'Da ket noi';
-                    statusBadge.className = 'text-emerald-400 font-medium';
-                }
+                renderOrUpdateParticipantCard(rId);
+                updateAdaptiveVideoGrid();
             } else if (state === 'disconnected' || state === 'failed') {
-                if (statusBadge) {
-                    statusBadge.innerText = 'Mat ket noi';
-                    statusBadge.className = 'text-rose-400 font-medium';
+                console.warn(`Peer ${rId} connection state: ${state}`);
+                if (state === 'failed') {
+                    removeParticipant(rId);
                 }
             }
         };
 
-        // Neu la nguoi khoi tao, tao Offer
-        if (isInitiator) {
-            createAndSendOffer();
+        return pc;
+    }
+
+    // Khoi tao lien ket Mesh voi mot nguoi dung cu the
+    function initiateConnectionWithPeer(remoteUserId, profile = null) {
+        const rId = Number(remoteUserId);
+        if (!rId || rId === Number(currentUserId)) return;
+
+        if (profile) {
+            remoteUserProfiles[rId] = {
+                name: profile.name || 'Thành viên',
+                avatar: profile.avatar || null
+            };
+        } else if (!remoteUserProfiles[rId]) {
+            remoteUserProfiles[rId] = {
+                name: 'Thành viên',
+                avatar: null
+            };
+        }
+
+        getOrCreatePeerConnection(rId);
+        renderOrUpdateParticipantCard(rId);
+
+        // Quy tac Tie-breaker chong xung dot Offer (Ke thua tu Nextcloud Talk):
+        // Nguoi dung co ID lon hon dong vai tro Initiator tao Offer. ID nho hon cho Offer.
+        const shouldInitiate = Number(currentUserId) > rId;
+        if (shouldInitiate) {
+            createAndSendOffer(rId);
         }
     }
 
-    async function createAndSendOffer() {
-        if (!peerConnection) return;
+    // Tao va gui Offer toi nguoi dung cu the
+    async function createAndSendOffer(remoteUserId) {
+        const rId = Number(remoteUserId);
+        const pc = getOrCreatePeerConnection(rId);
+        if (!pc) return;
+
         try {
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-            await sendSignal('webrtc_offer', { sdp: peerConnection.localDescription });
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            await sendSignal('webrtc_offer', { sdp: pc.localDescription }, rId);
         } catch (err) {
-            console.error('Loi tao Offer:', err);
+            console.error(`Loi tao Offer cho peer ${rId}:`, err);
         }
     }
 
-    async function handleReceiveOffer(sdp) {
-        if (!peerConnection) {
-            initPeerConnection();
-        }
+    // Xu ly nhan Offer tu nguoi dung khac
+    async function handleReceiveOffer(senderId, sdp) {
+        const sId = Number(senderId);
+        const pc = getOrCreatePeerConnection(sId);
+
         try {
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            await sendSignal('webrtc_answer', { sdp: peerConnection.localDescription });
+            // Perfect Negotiation pattern: Xu ly va cham glare khi ca 2 cung gui offer
+            if (pc.signalingState !== 'stable') {
+                if (Number(currentUserId) < sId) {
+                    await pc.setLocalDescription({ type: 'rollback' });
+                } else {
+                    return;
+                }
+            }
+
+            await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+            await drainPendingIceCandidates(sId);
+
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            await sendSignal('webrtc_answer', { sdp: pc.localDescription }, sId);
         } catch (err) {
-            console.error('Loi xu ly Offer:', err);
+            console.error(`Loi xu ly Offer tu peer ${sId}:`, err);
         }
     }
 
-    async function handleReceiveAnswer(sdp) {
-        if (!peerConnection) return;
+    // Xu ly nhan Answer tu nguoi dung khac
+    async function handleReceiveAnswer(senderId, sdp) {
+        const sId = Number(senderId);
+        const pc = peers[sId];
+        if (!pc) return;
+
         try {
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+            await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+            await drainPendingIceCandidates(sId);
         } catch (err) {
-            console.error('Loi xu ly Answer:', err);
+            console.error(`Loi xu ly Answer tu peer ${sId}:`, err);
         }
     }
 
-    async function handleReceiveIceCandidate(candidate) {
-        if (!peerConnection) return;
-        try {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (err) {
-            console.error('Loi them ICE Candidate:', err);
+    // Xu ly nhan ICE Candidate tu nguoi dung khac
+    async function handleReceiveIceCandidate(senderId, candidate) {
+        if (!candidate) return;
+        const sId = Number(senderId);
+        const pc = peers[sId];
+
+        if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+            try {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (err) {
+                console.warn(`Loi nap ICE Candidate cho peer ${sId}:`, err);
+            }
+        } else {
+            pendingIceCandidates[sId] = pendingIceCandidates[sId] || [];
+            pendingIceCandidates[sId].push(candidate);
         }
     }
 
-    // --- Gui tin hieu Signaling qua Reverb ---
-    async function sendSignal(action, payload = {}) {
+    // Giai phong hang doi ICE Candidate khi RemoteDescription da san sang
+    async function drainPendingIceCandidates(senderId) {
+        const sId = Number(senderId);
+        const pc = peers[sId];
+        if (!pc || !pendingIceCandidates[sId]) return;
+
+        while (pendingIceCandidates[sId].length > 0) {
+            const candidate = pendingIceCandidates[sId].shift();
+            try {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (err) {
+                console.warn(`Loi giai phong ICE Candidate cho peer ${sId}:`, err);
+            }
+        }
+    }
+
+    // --- Gui tin hieu Signaling qua Reverb (Ho tro muc tieu target_user_id) ---
+    async function sendSignal(action, payload = {}, targetUserId = null) {
+        if (!activeConversationId) return;
         try {
-            await fetch(`/app/conversation/${currentConvId}/meeting/signal`, {
+            await fetch(`/app/conversation/${activeConversationId}/meeting/signal`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
                 },
                 body: JSON.stringify({
                     action: action,
                     room_code: activeRoomCode,
                     call_type: activeCallType,
+                    target_user_id: targetUserId ? Number(targetUserId) : null,
                     payload: payload
                 })
             });
@@ -394,7 +1273,7 @@
         }
     }
 
-    // --- Dieu khien Micro / Camera ---
+    // --- Dieu khien Micro ---
     window.toggleMicrophone = function() {
         if (!localStream) return;
         const audioTrack = localStream.getAudioTracks()[0];
@@ -406,10 +1285,61 @@
         }
     };
 
-    window.toggleCamera = function() {
+    // --- Dieu khien Camera & Nang cap linh hoat sang Video Call tren toan Mesh ---
+    window.toggleCamera = async function() {
         if (!localStream) return;
-        const videoTrack = localStream.getVideoTracks()[0];
-        if (videoTrack) {
+        let videoTrack = localStream.getVideoTracks()[0];
+
+        if (!videoTrack) {
+            // Bat dau tu cuoc goi Thoai -> Nang cap len Video Call
+            try {
+                const newStream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 1280 }, height: { ideal: 720 } }
+                });
+                videoTrack = newStream.getVideoTracks()[0];
+                localStream.addTrack(videoTrack);
+                activeCallType = 'video';
+                isMutedVideo = false;
+
+                // Nap track moi vao tat ca cac ket noi Mesh dang co
+                for (const peerId in peers) {
+                    const pc = peers[peerId];
+                    const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                    if (sender) {
+                        await sender.replaceTrack(videoTrack);
+                    } else {
+                        pc.addTrack(videoTrack, localStream);
+                        await createAndSendOffer(peerId);
+                    }
+                }
+
+                attachLocalMediaStream(localStream);
+                updateMediaControlsUI();
+                sendSignal('media_state_changed', { 
+                    isMutedAudio, 
+                    isMutedVideo: false, 
+                    isSharingScreen, 
+                    upgradedToVideo: true 
+                });
+
+                if (typeof Toastify === 'function') {
+                    Toastify({ 
+                        text: 'Đã bật Camera và chuyển sang cuộc gọi Video.', 
+                        style: { background: '#0ea5e9', borderRadius: '0.5rem' } 
+                    }).showToast();
+                }
+            } catch (err) {
+                console.error('Loi xin quyen camera khi nang cap:', err);
+                if (typeof Toastify === 'function') {
+                    Toastify({ 
+                        text: 'Không thể truy cập Camera của thiết bị.', 
+                        style: { background: '#f43f5e', borderRadius: '0.5rem' } 
+                    }).showToast();
+                }
+                return;
+            }
+        } else {
+            // Da co video track -> Bat / Tat binh thuong
             isMutedVideo = !isMutedVideo;
             videoTrack.enabled = !isMutedVideo;
             updateMediaControlsUI();
@@ -417,20 +1347,29 @@
         }
     };
 
-    // --- Chia se man hinh (Ke thua kien truc Nextcloud Talk) ---
+    // --- Chia se man hinh Full-Mesh ---
     window.toggleScreenShare = async function() {
         if (isSharingScreen) {
             stopScreenShare();
         } else {
-            startScreenShare();
+            await startScreenShare();
         }
     };
 
     async function startScreenShare() {
+        if (currentScreenSharerId && Number(currentScreenSharerId) !== Number(currentUserId)) {
+            const confirmMsg = `Thành viên "${currentScreenSharerName || 'đối phương'}" đang chia sẻ màn hình. Bạn có chắc muốn bắt đầu chia sẻ và thay thế màn hình đang chiếu không?`;
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+        }
+
         try {
-            // Goi getDisplayMedia theo chuan Nextcloud Talk
+            const currentVideoTrack = localStream?.getVideoTracks()[0];
+            wasCameraActiveBeforeScreenShare = !!(currentVideoTrack && currentVideoTrack.enabled && !isMutedVideo && activeCallType === 'video');
+
             screenStream = await navigator.mediaDevices.getDisplayMedia({
-                video: true,
+                video: { cursor: 'always' },
                 audio: {
                     echoCancellation: false,
                     autoGainControl: false,
@@ -439,89 +1378,127 @@
             });
 
             isSharingScreen = true;
-            const screenTrack = screenStream.getVideoTracks()[0];
+            currentScreenSharerId = currentUserId;
+            currentScreenSharerName = currentUserName;
 
-            // Trao doi track camera bang track man hinh tren WebRTC Sender
-            if (peerConnection) {
-                const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+            const screenTrack = screenStream.getVideoTracks()[0];
+            if (screenTrack) {
+                screenTrack.contentHint = 'detail';
+            }
+
+            // Thay the track tren tat ca cac Peer trong Mesh
+            for (const peerId in peers) {
+                const pc = peers[peerId];
+                let sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (!sender) {
+                    sender = pc.getSenders().find(s => s.track === null);
+                }
+
                 if (sender) {
-                    sender.replaceTrack(screenTrack);
+                    await sender.replaceTrack(screenTrack);
+                } else {
+                    pc.addTrack(screenTrack, screenStream);
+                    await createAndSendOffer(peerId);
                 }
             }
 
-            // Hien thi Spotlight man hinh chieu tren UI
+            // Hien thi Spotlight trinh chieu tren UI cua chinh minh
             const spotlightContainer = document.getElementById('screen-share-spotlight');
             const screenVideo = document.getElementById('screen-share-video');
             const mirrorPlaceholder = document.getElementById('screen-mirror-placeholder');
             const screenSharerName = document.getElementById('screen-sharer-name');
 
             if (spotlightContainer) spotlightContainer.classList.remove('hidden');
-            if (screenVideo) screenVideo.srcObject = screenStream;
-            if (screenSharerName) screenSharerName.innerText = 'Man hinh cua ban';
+            if (screenVideo) {
+                screenVideo.muted = true;
+                screenVideo.srcObject = screenStream;
+                screenVideo.play().catch(e => console.warn('Screen video play blocked:', e));
+            }
+            if (screenSharerName) screenSharerName.innerText = 'Màn hình của bạn';
 
-            // Kiem tra loai display surface de chong hieu ung guong vo tan
-            const displaySurface = screenTrack.getSettings?.().displaySurface;
-            if (displaySurface !== 'browser' && mirrorPlaceholder) {
-                mirrorPlaceholder.classList.remove('hidden');
+            if (mirrorPlaceholder) {
+                mirrorPlaceholder.classList.add('hidden');
             }
 
-            // Lang nghe khi nguoi dung bam nut Stop Sharing tren trinh duyet
+            // Lang nghe khi nguoi dung bam Dung chia se tren thanh cong cu trinh duyet
             screenTrack.onended = () => {
                 stopScreenShare();
             };
 
             updateMediaControlsUI();
-            sendSignal('media_state_changed', { isMutedAudio, isMutedVideo, isSharingScreen: true });
+            sendSignal('screen_share_started', { 
+                sharerId: currentUserId, 
+                sharerName: currentUserName 
+            });
+
+            if (typeof Toastify === 'function') {
+                Toastify({
+                    text: 'Bạn đang chia sẻ màn hình.',
+                    style: { background: '#0284c7', borderRadius: '0.5rem' }
+                }).showToast();
+            }
         } catch (err) {
             console.error('Loi chia se man hinh:', err);
             isSharingScreen = false;
         }
     }
 
-    window.stopScreenShare = function() {
+    window.stopScreenShare = function(notifySignal = true) {
         if (screenStream) {
             screenStream.getTracks().forEach(t => t.stop());
             screenStream = null;
         }
 
         isSharingScreen = false;
+        if (currentScreenSharerId === currentUserId) {
+            currentScreenSharerId = null;
+            currentScreenSharerName = '';
+        }
 
-        // Trao nguoc lai track camera cu
-        if (peerConnection && localStream) {
-            const videoTrack = localStream.getVideoTracks()[0];
-            const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-            if (sender && videoTrack) {
-                sender.replaceTrack(videoTrack);
+        // Khoi phuc camera cu tren tat ca cac Peer trong Mesh
+        const videoTrack = localStream?.getVideoTracks()[0];
+        const restoreTrack = (wasCameraActiveBeforeScreenShare && videoTrack) ? videoTrack : null;
+
+        for (const peerId in peers) {
+            const pc = peers[peerId];
+            const sender = pc.getSenders().find(s => (s.track && s.track.kind === 'video') || s.track === null);
+            if (sender) {
+                sender.replaceTrack(restoreTrack);
             }
         }
 
-        // An Spotlight man hinh chieu
+        // An Spotlight tren man hinh cua chinh minh
         const spotlightContainer = document.getElementById('screen-share-spotlight');
         const mirrorPlaceholder = document.getElementById('screen-mirror-placeholder');
+        const screenVideo = document.getElementById('screen-share-video');
         if (spotlightContainer) spotlightContainer.classList.add('hidden');
         if (mirrorPlaceholder) mirrorPlaceholder.classList.add('hidden');
+        if (screenVideo) screenVideo.srcObject = null;
 
         updateMediaControlsUI();
-        sendSignal('media_state_changed', { isMutedAudio, isMutedVideo, isSharingScreen: false });
+        if (notifySignal) {
+            sendSignal('screen_share_stopped', { sharerId: currentUserId });
+        }
     };
 
     // --- Ket thuc cuoc goi / Roi phong ---
-    window.endCurrentCall = async function() {
+    window.endCurrentCall = async function(endForAll = false) {
         stopRingtone();
         stopCallTimer();
 
-        if (activeRoomCode) {
+        if (activeRoomCode && activeConversationId) {
             try {
-                await fetch(`/app/conversation/${currentConvId}/meeting/leave`, {
+                await fetch(`/app/conversation/${activeConversationId}/meeting/leave`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
                     },
                     body: JSON.stringify({
                         room_code: activeRoomCode,
-                        call_type: activeCallType
+                        call_type: activeCallType,
+                        end_for_all: endForAll
                     })
                 });
             } catch (err) {
@@ -546,15 +1523,44 @@
             screenStream = null;
         }
 
-        if (peerConnection) {
-            peerConnection.close();
-            peerConnection = null;
+        // Dong tat ca cac ket noi WebRTC Mesh
+        for (const peerId in peers) {
+            if (peers[peerId]) {
+                peers[peerId].close();
+            }
         }
+        peers = {};
+        remoteStreams = {};
+        remoteUserProfiles = {};
+        pendingIceCandidates = {};
+        remoteUserStates = {};
 
         activeMeetingId = null;
         activeRoomCode = null;
         isSharingScreen = false;
+        currentScreenSharerId = null;
+        currentScreenSharerName = '';
+        wasCameraActiveBeforeScreenShare = false;
         isInitiator = false;
+        preCallMutedAudio = false;
+        preCallMutedVideo = false;
+
+        // Xoa tat ca the video remote khoi DOM
+        const gridEl = document.getElementById('meeting-video-grid');
+        if (gridEl) {
+            const dynamicCards = gridEl.querySelectorAll('[id^="remote-card-"]');
+            dynamicCards.forEach(c => c.remove());
+        }
+
+        teardownScreenShareSpotlight();
+        updateAdaptiveVideoGrid();
+
+        isGroupMeeting = false;
+        isMeetingHost = false;
+        currentHostUserId = null;
+        isHandRaised = false;
+        closeHostLeaveConfirmModal();
+        updateMeetingRoleUI();
 
         const modalMeeting = document.getElementById('modal-meeting-room');
         if (modalMeeting) modalMeeting.classList.add('hidden');
@@ -563,7 +1569,7 @@
         if (modalIncoming) modalIncoming.classList.add('hidden');
     }
 
-    // --- Cap nhat giao dien ---
+    // --- Cap nhat giao dien phong hop ---
     function openMeetingRoomModal() {
         const modalMeeting = document.getElementById('modal-meeting-room');
         if (modalMeeting) modalMeeting.classList.remove('hidden');
@@ -576,10 +1582,20 @@
     function attachLocalMediaStream(stream) {
         const localVideo = document.getElementById('local-video');
         const localFallback = document.getElementById('local-video-fallback');
+        const localAvatarImg = document.getElementById('local-avatar-img');
+        const localAvatarLetter = document.getElementById('local-avatar-letter');
+
+        if (currentUserAvatar && localAvatarImg) {
+            localAvatarImg.src = currentUserAvatar;
+            localAvatarImg.classList.remove('hidden');
+            if (localAvatarLetter) localAvatarLetter.classList.add('hidden');
+        } else if (localAvatarLetter) {
+            localAvatarLetter.innerText = currentUserName.charAt(0).toUpperCase();
+        }
 
         if (localVideo) {
             localVideo.srcObject = stream;
-            if (activeCallType === 'voice') {
+            if (activeCallType === 'voice' || isMutedVideo) {
                 localVideo.classList.add('hidden');
                 if (localFallback) localFallback.classList.remove('hidden');
             } else {
@@ -590,7 +1606,6 @@
     }
 
     function updateMediaControlsUI() {
-        // Nut Mic
         const btnMic = document.getElementById('btn-call-mic');
         const iconMic = document.getElementById('icon-call-mic');
         const localMicBadge = document.getElementById('local-mic-badge');
@@ -607,7 +1622,6 @@
             }
         }
 
-        // Nut Camera
         const btnCam = document.getElementById('btn-call-cam');
         const iconCam = document.getElementById('icon-call-cam');
         const localVideo = document.getElementById('local-video');
@@ -627,7 +1641,6 @@
             }
         }
 
-        // Nut Chia se man hinh
         const btnScreen = document.getElementById('btn-call-screen');
         if (btnScreen) {
             if (isSharingScreen) {
@@ -655,68 +1668,340 @@
         }
     };
 
+    // --- Ham xu ly tap trung cac su kien Signaling ---
+    function handleCallSignal(e) {
+        if (Number(e.senderId) === Number(currentUserId)) return;
+
+        // Loc tin hieu huong dich: Neu tin hieu co chi dinh targetUserId ma khong phai minh thi bo qua
+        const targetId = e.targetUserId || e.target_user_id;
+        if (targetId && Number(targetId) !== Number(currentUserId)) {
+            return;
+        }
+
+        switch (e.action) {
+            case 'meeting_started_banner':
+                const activeBanner = document.getElementById('active-meeting-banner');
+                const bannerHostDesc = document.getElementById('active-meeting-host-desc');
+                if (activeBanner) {
+                    activeBanner.classList.remove('hidden');
+                    activeBanner.classList.add('flex');
+                    if (bannerHostDesc) {
+                        bannerHostDesc.innerText = `Chủ phòng: ${e.senderName || 'Bạn học'}`;
+                    }
+                    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                        lucide.createIcons();
+                    }
+                }
+                break;
+
+            case 'incoming_call':
+                handleIncomingCall(e);
+                break;
+
+            case 'accept_call':
+                stopRingtone();
+                startCallTimer();
+                const statusBadge = document.getElementById('meeting-status-badge');
+                if (statusBadge) {
+                    statusBadge.innerText = 'Đang diễn ra';
+                    statusBadge.className = 'text-emerald-400 font-medium';
+                }
+
+                const accepterId = e.senderId;
+                if (accepterId) {
+                    initiateConnectionWithPeer(accepterId, {
+                        name: e.senderName,
+                        avatar: e.senderAvatar
+                    });
+                }
+
+                // Dong bo nguoi vao sau neu ban than dang chia se man hinh
+                if (isSharingScreen && currentScreenSharerId === currentUserId && accepterId) {
+                    sendSignal('screen_share_started', {
+                        sharerId: currentUserId,
+                        sharerName: currentUserName
+                    }, accepterId);
+                }
+                break;
+
+            case 'reject_call':
+                stopRingtone();
+                if (typeof Toastify === 'function') {
+                    Toastify({ text: 'Đối phương đã từ chối cuộc gọi.', style: { background: '#f43f5e' } }).showToast();
+                }
+                cleanupCall();
+                break;
+
+            case 'participant_joined':
+                const newUserId = e.payload?.user_id;
+                if (newUserId && Number(newUserId) !== Number(currentUserId)) {
+                    if (typeof Toastify === 'function') {
+                        Toastify({
+                            text: `${e.payload?.user_name || 'Một thành viên'} đã tham gia phòng học.`,
+                            style: { background: '#0284c7', borderRadius: '0.5rem' },
+                            duration: 3000
+                        }).showToast();
+                    }
+
+                    initiateConnectionWithPeer(newUserId, {
+                        name: e.payload?.user_name,
+                        avatar: e.payload?.user_avatar
+                    });
+
+                    // Dong bo nguoi vao sau neu ban than dang chia se man hinh
+                    if (isSharingScreen && currentScreenSharerId === currentUserId) {
+                        sendSignal('screen_share_started', {
+                            sharerId: currentUserId,
+                            sharerName: currentUserName
+                        }, newUserId);
+                    }
+                }
+                break;
+
+            case 'participant_left':
+                const leftName = e.payload?.left_user_name || 'Một thành viên';
+                const leftUserId = e.payload?.left_user_id;
+
+                if (typeof Toastify === 'function') {
+                    Toastify({
+                        text: `${leftName} đã rời phòng học.`,
+                        style: { background: '#64748b', borderRadius: '0.5rem' },
+                        duration: 3000
+                    }).showToast();
+                }
+
+                if (leftUserId) {
+                    removeParticipant(leftUserId);
+                }
+
+                if (e.payload?.new_host_id && Number(e.payload.new_host_id) === Number(currentUserId)) {
+                    isMeetingHost = true;
+                    currentHostUserId = currentUserId;
+                    updateMeetingRoleUI();
+                    if (typeof Toastify === 'function') {
+                        Toastify({
+                            text: 'Bạn đã trở thành Chủ phòng mới.',
+                            style: { background: '#059669', borderRadius: '0.5rem' },
+                            duration: 4000
+                        }).showToast();
+                    }
+                } else if (e.payload?.new_host_id) {
+                    currentHostUserId = e.payload.new_host_id;
+                    updateMeetingRoleUI();
+                }
+                break;
+
+            case 'raise_hand':
+                const handUserId = Number(e.payload?.userId || e.senderId);
+                remoteUserStates[handUserId] = remoteUserStates[handUserId] || {};
+                remoteUserStates[handUserId].isHandRaised = true;
+                renderOrUpdateParticipantCard(handUserId);
+                playTone(600, 800, 0.2);
+                if (typeof Toastify === 'function') {
+                    Toastify({
+                        text: `${e.payload?.userName || e.senderName || 'Một thành viên'} đang giơ tay phát biểu.`,
+                        style: { background: '#f59e0b', borderRadius: '0.5rem' },
+                        duration: 3500
+                    }).showToast();
+                }
+                break;
+
+            case 'lower_hand':
+                const lowerUserId = Number(e.payload?.userId || e.senderId);
+                if (remoteUserStates[lowerUserId]) {
+                    remoteUserStates[lowerUserId].isHandRaised = false;
+                }
+                renderOrUpdateParticipantCard(lowerUserId);
+                break;
+
+            case 'host_mute_user':
+                if (localStream) {
+                    const audioTrack = localStream.getAudioTracks()[0];
+                    if (audioTrack && audioTrack.enabled) {
+                        isMutedAudio = true;
+                        audioTrack.enabled = false;
+                        updateMediaControlsUI();
+                        sendSignal('media_state_changed', { isMutedAudio, isMutedVideo, isSharingScreen });
+                        if (typeof Toastify === 'function') {
+                            Toastify({
+                                text: 'Chủ phòng đã tắt micro của bạn.',
+                                style: { background: '#f43f5e', borderRadius: '0.5rem' },
+                                duration: 3500
+                            }).showToast();
+                        }
+                    }
+                }
+                break;
+
+            case 'host_mute_all':
+                if (!isMeetingHost && localStream) {
+                    const audioTrack = localStream.getAudioTracks()[0];
+                    if (audioTrack && audioTrack.enabled) {
+                        isMutedAudio = true;
+                        audioTrack.enabled = false;
+                        updateMediaControlsUI();
+                        sendSignal('media_state_changed', { isMutedAudio, isMutedVideo, isSharingScreen });
+                        if (typeof Toastify === 'function') {
+                            Toastify({
+                                text: 'Chủ phòng đã tắt micro tất cả thành viên.',
+                                style: { background: '#f43f5e', borderRadius: '0.5rem' },
+                                duration: 3500
+                            }).showToast();
+                        }
+                    }
+                }
+                break;
+
+            case 'webrtc_offer':
+                handleReceiveOffer(e.senderId, e.payload.sdp);
+                break;
+
+            case 'webrtc_answer':
+                handleReceiveAnswer(e.senderId, e.payload.sdp);
+                break;
+
+            case 'webrtc_ice_candidate':
+                handleReceiveIceCandidate(e.senderId, e.payload.candidate);
+                break;
+
+            case 'media_state_changed':
+                const sId = Number(e.senderId);
+                remoteUserStates[sId] = e.payload;
+
+                if (e.payload.upgradedToVideo) {
+                    activeCallType = 'video';
+                    if (typeof Toastify === 'function') {
+                        Toastify({ 
+                            text: `${e.senderName || 'Một thành viên'} đã bật Camera.`, 
+                            style: { background: '#0ea5e9', borderRadius: '0.5rem' } 
+                        }).showToast();
+                    }
+                }
+
+                renderOrUpdateParticipantCard(sId);
+                break;
+
+            case 'screen_share_started':
+                const newSharerId = Number(e.payload?.sharerId);
+                const newSharerName = e.payload?.sharerName || e.senderName || 'Thành viên';
+
+                if (isSharingScreen && newSharerId && newSharerId !== Number(currentUserId)) {
+                    stopScreenShare(false);
+                    if (typeof Toastify === 'function') {
+                        Toastify({
+                            text: `Thành viên "${newSharerName}" đã bắt đầu chia sẻ màn hình. Chia sẻ của bạn đã tạm dừng.`,
+                            style: { background: '#f59e0b', borderRadius: '0.5rem' },
+                            duration: 4000
+                        }).showToast();
+                    }
+                }
+
+                currentScreenSharerId = newSharerId;
+                currentScreenSharerName = newSharerName;
+
+                const spotlightContainer = document.getElementById('screen-share-spotlight');
+                const screenVideo = document.getElementById('screen-share-video');
+                const mirrorPlaceholder = document.getElementById('screen-mirror-placeholder');
+                const screenSharerNameEl = document.getElementById('screen-sharer-name');
+
+                if (spotlightContainer) spotlightContainer.classList.remove('hidden');
+                if (mirrorPlaceholder) mirrorPlaceholder.classList.add('hidden');
+
+                // Cap nhat the camera cua nguoi chia se (chuyen sang fallback de tranh suspension)
+                renderOrUpdateParticipantCard(newSharerId);
+
+                const sharerStream = remoteStreams[newSharerId];
+                if (screenVideo && sharerStream) {
+                    screenVideo.muted = true;
+                    screenVideo.srcObject = sharerStream;
+
+                    const playSpotlight = () => {
+                        if (screenVideo.paused) {
+                            screenVideo.play().catch(e => console.warn('Spotlight play waiting:', e));
+                        }
+                    };
+
+                    screenVideo.onloadedmetadata = playSpotlight;
+                    screenVideo.oncanplay = playSpotlight;
+                    playSpotlight();
+                }
+
+                if (screenSharerNameEl) {
+                    screenSharerNameEl.innerText = `${newSharerName} đang trình chiếu`;
+                }
+
+                updateMediaControlsUI();
+                break;
+
+            case 'screen_share_stopped':
+                const stoppedSharerId = Number(e.payload?.sharerId);
+                if (!stoppedSharerId || stoppedSharerId === Number(currentScreenSharerId)) {
+                    teardownScreenShareSpotlight();
+                }
+                break;
+
+            case 'end_call':
+                const bannerEnd = document.getElementById('active-meeting-banner');
+                if (bannerEnd) {
+                    bannerEnd.classList.add('hidden');
+                    bannerEnd.classList.remove('flex');
+                }
+                if (typeof Toastify === 'function') {
+                    Toastify({ text: 'Cuộc gọi / phòng họp đã kết thúc.', style: { background: '#64748b' } }).showToast();
+                }
+                cleanupCall();
+                break;
+        }
+    }
+
+    // --- Phong to rieng khung trinh chieu man hinh ---
+    window.toggleScreenShareFullscreen = function() {
+        const spot = document.getElementById('screen-share-spotlight');
+        if (!spot) return;
+        if (!document.fullscreenElement) {
+            if (spot.requestFullscreen) {
+                spot.requestFullscreen();
+            } else if (spot.webkitRequestFullscreen) {
+                spot.webkitRequestFullscreen();
+            }
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        }
+    };
+
     // --- Lang nghe su kien qua Laravel Reverb ---
     document.addEventListener('DOMContentLoaded', () => {
-        if (typeof window.Echo === 'undefined' || !currentConvId) return;
+        if (typeof window.Echo === 'undefined') return;
 
-        window.Echo.private(`conversation.${currentConvId}`)
-            .listen('.CallSignalEvent', (e) => {
-                if (e.senderId === currentUserId) return;
+        // 1. Kenh ca nhan toan cuc cua nguoi dung: Nhan cuoc goi den moi luc
+        window.Echo.private(`App.Models.User.${currentUserId}`)
+            .listen('.CallSignalEvent', handleCallSignal);
 
-                switch (e.action) {
-                    case 'incoming_call':
-                        handleIncomingCall(e);
-                        break;
-                    case 'accept_call':
-                        stopRingtone();
-                        startCallTimer();
-                        const statusBadge = document.getElementById('meeting-status-badge');
-                        if (statusBadge) {
-                            statusBadge.innerText = 'Da ket noi';
-                            statusBadge.className = 'text-emerald-400 font-medium';
-                        }
-                        if (isInitiator) {
-                            createAndSendOffer();
-                        }
-                        break;
-                    case 'reject_call':
-                        stopRingtone();
-                        Toastify({ text: 'Doi phuong da tu choi cuoc goi.', style: { background: '#f43f5e' } }).showToast();
-                        cleanupCall();
-                        break;
-                    case 'end_call':
-                        Toastify({ text: 'Cuoc goi da ket thuc.', style: { background: '#64748b' } }).showToast();
-                        cleanupCall();
-                        break;
-                    case 'webrtc_offer':
-                        handleReceiveOffer(e.payload.sdp);
-                        break;
-                    case 'webrtc_answer':
-                        handleReceiveAnswer(e.payload.sdp);
-                        break;
-                    case 'webrtc_ice_candidate':
-                        handleReceiveIceCandidate(e.payload.candidate);
-                        break;
-                    case 'media_state_changed':
-                        const remoteMic = document.getElementById('remote-mic-badge');
-                        const remoteVideo = document.getElementById('remote-video');
-                        const remoteFallback = document.getElementById('remote-video-fallback');
+        // 2. Kenh hoi thoai (neu dang o trong phong chat)
+        if (activeConversationId) {
+            window.Echo.private(`conversation.${activeConversationId}`)
+                .listen('.CallSignalEvent', handleCallSignal);
+        }
+    });
 
-                        if (remoteMic) {
-                            remoteMic.className = e.payload.isMutedAudio ? 'text-rose-400' : 'text-emerald-400';
-                        }
-                        if (remoteVideo && remoteFallback) {
-                            if (e.payload.isMutedVideo) {
-                                remoteVideo.classList.add('hidden');
-                                remoteFallback.classList.remove('hidden');
-                            } else {
-                                remoteVideo.classList.remove('hidden');
-                                remoteFallback.classList.add('hidden');
-                            }
-                        }
-                        break;
-                }
+    // --- Tu dong roi phong khi tat tab hoac dong trinh duyet (Chong treo phong hop) ---
+    window.addEventListener('beforeunload', () => {
+        if (activeRoomCode && activeConversationId) {
+            const leavePayload = JSON.stringify({
+                room_code: activeRoomCode,
+                call_type: activeCallType,
+                end_for_all: false
             });
+            const leaveUrl = `/app/conversation/${activeConversationId}/meeting/leave`;
+            if (navigator.sendBeacon) {
+                const blob = new Blob([leavePayload], { type: 'application/json' });
+                navigator.sendBeacon(leaveUrl, blob);
+            }
+        }
     });
 })();
 </script>

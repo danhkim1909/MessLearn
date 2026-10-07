@@ -19,6 +19,7 @@ class CallSignalEvent implements ShouldBroadcastNow
     public string $senderName;
     public ?string $senderAvatar;
     public ?int $targetUserId;
+    public ?array $targetUserIds;
     public ?string $roomCode;
     public string $callType;
     public ?array $payload;
@@ -35,7 +36,8 @@ class CallSignalEvent implements ShouldBroadcastNow
         ?int $targetUserId = null,
         ?string $roomCode = null,
         string $callType = 'video',
-        ?array $payload = null
+        ?array $payload = null,
+        ?array $targetUserIds = null
     ) {
         $this->conversationId = $conversationId;
         $this->action = $action;
@@ -43,6 +45,7 @@ class CallSignalEvent implements ShouldBroadcastNow
         $this->senderName = $senderName;
         $this->senderAvatar = $senderAvatar;
         $this->targetUserId = $targetUserId;
+        $this->targetUserIds = $targetUserIds;
         $this->roomCode = $roomCode;
         $this->callType = $callType;
         $this->payload = $payload;
@@ -55,9 +58,23 @@ class CallSignalEvent implements ShouldBroadcastNow
      */
     public function broadcastOn(): array
     {
-        return [
+        $channels = [
             new PrivateChannel('conversation.' . $this->conversationId),
         ];
+
+        if ($this->targetUserId) {
+            $channels[] = new PrivateChannel('App.Models.User.' . $this->targetUserId);
+        }
+
+        if (!empty($this->targetUserIds)) {
+            foreach ($this->targetUserIds as $uid) {
+                if ($uid && (int)$uid !== $this->senderId) {
+                    $channels[] = new PrivateChannel('App.Models.User.' . (int)$uid);
+                }
+            }
+        }
+
+        return $channels;
     }
 
     public function broadcastAs(): string

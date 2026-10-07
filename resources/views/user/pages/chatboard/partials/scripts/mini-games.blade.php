@@ -162,8 +162,10 @@ function renderRpsCardHtml(message, isMine) {
             bar.classList.remove('hidden');
             lucide.createIcons();
 
-            if (wasNearBottom) {
-                smartScrollToBottom(true, true);
+            if (typeof isNearBottom === 'function' && isNearBottom(150)) {
+                if (typeof smartScrollToBottom === 'function') {
+                    smartScrollToBottom(true, true);
+                }
             }
         }
 
@@ -211,6 +213,7 @@ function toggleReactionMenu(messageId) {
                     Toastify({ text: "Lỗi thả cảm xúc", style: { background: "#f43f5e" } }).showToast();
                 }
             } catch (err) {
+                console.error('Loi khi cap nhat cam xuc:', err);
                 Toastify({ text: "Lỗi kết nối", style: { background: "#f43f5e" } }).showToast();
             }
         }
@@ -234,8 +237,10 @@ function toggleReactionMenu(messageId) {
             }
             lucide.createIcons();
 
-            if (wasNearBottom) {
-                smartScrollToBottom(true, true);
+            if (typeof isNearBottom === 'function' && isNearBottom(150)) {
+                if (typeof smartScrollToBottom === 'function') {
+                    smartScrollToBottom(true, true);
+                }
             }
         }
 
@@ -378,7 +383,7 @@ function toggleReactionMenu(messageId) {
         }
 
         function updateMessageInChat(message) {
-            const wasNearBottom = isNearBottom(150);
+            const wasNearBottom = (typeof isNearBottom === 'function') ? isNearBottom(150) : true;
             const msgEl = document.getElementById('msg-' + message.id);
             if (!msgEl) return;
 
@@ -393,7 +398,7 @@ function toggleReactionMenu(messageId) {
                     banner.setAttribute('data-event-id', '');
                 }
 
-                if (wasNearBottom) {
+                if (wasNearBottom && typeof smartScrollToBottom === 'function') {
                     smartScrollToBottom(true, true);
                 }
                 return;
@@ -419,7 +424,7 @@ function toggleReactionMenu(messageId) {
 
             lucide.createIcons();
 
-            if (wasNearBottom) {
+            if (wasNearBottom && typeof smartScrollToBottom === 'function') {
                 smartScrollToBottom(true, true);
             }
         }

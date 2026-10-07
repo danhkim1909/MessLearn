@@ -29,6 +29,11 @@ class MeetingController extends Controller
             $type = 'video';
         }
 
+        $mode = $request->input('mode', 'call');
+        if (!in_array($mode, ['call', 'classroom'])) {
+            $mode = 'call';
+        }
+
         // Kiem tra xem da co cuoc hop nao dang dien ra trong phong khong
         $activeMeeting = $conversation->meetings()
             ->whereIn('status', ['ringing', 'ongoing'])
@@ -41,11 +46,59 @@ class MeetingController extends Controller
                 ['status' => 'joined', 'joined_at' => now()]
             );
 
+            if ($participant->status !== 'joined') {
+                $participant->update([
+                    'status' => 'joined',
+                    'joined_at' => now(),
+                    'left_at' => null,
+                ]);
+            }
+
+            // Lay danh sach cac thanh vien dang co mat trong phong (ngoai tru ban than)
+            $existingParticipants = MeetingParticipant::where('meeting_id', $activeMeeting->id)
+                ->where('status', 'joined')
+                ->where('user_id', '!=', $userId)
+                ->with('user')
+                ->get()
+                ->map(fn($p) => [
+                    'id' => $p->user_id,
+                    'name' => $p->user?->name ?? 'Bạn học',
+                    'avatar' => $p->user?->avatar_url ?? '',
+                ])
+                ->values()
+                ->toArray();
+
+            $existingParticipantUserIds = array_column($existingParticipants, 'id');
+
+            // Phat tin hieu cho cac thanh vien cu biet co nguoi moi vao phong
+            broadcast(new CallSignalEvent(
+                conversationId: $conversation->id,
+                action: 'participant_joined',
+                senderId: $userId,
+                senderName: Auth::user()->name,
+                senderAvatar: Auth::user()->avatar_url,
+                targetUserId: null,
+                roomCode: $activeMeeting->room_code,
+                callType: $activeMeeting->type,
+                payload: [
+                    'user_id' => $userId,
+                    'user_name' => Auth::user()->name,
+                    'user_avatar' => Auth::user()->avatar_url,
+                ],
+                targetUserIds: $existingParticipantUserIds
+            ))->toOthers();
+
             return response()->json([
                 'success' => true,
                 'meeting' => $activeMeeting,
                 'room_code' => $activeMeeting->room_code,
                 'is_existing' => true,
+                'is_host' => $activeMeeting->host_id === $userId,
+                'is_group' => (bool)$conversation->is_group,
+                'mode' => $mode,
+                'host_id' => $activeMeeting->host_id,
+                'host_name' => $activeMeeting->host?->name ?? 'Chủ phòng',
+                'existing_participants' => $existingParticipants,
             ]);
         }
 
@@ -71,20 +124,34 @@ class MeetingController extends Controller
             return $m;
         });
 
+        $targetUserIds = $conversation->participants()
+            ->where('user_id', '!=', $userId)
+            ->pluck('user_id')
+            ->toArray();
+        $targetUserId = count($targetUserIds) === 1 ? (int)$targetUserIds[0] : null;
+
+        // Phan biet: Phong hoc nhom (classroom) phat banner thong bao, con cuoc goi thoai/video (call) hoac 1-1 thi do chuong
+        $callAction = ($conversation->is_group && $mode === 'classroom') ? 'meeting_started_banner' : 'incoming_call';
+
         // Phat su kien cuoc goi den qua Reverb
         broadcast(new CallSignalEvent(
             conversationId: $conversation->id,
-            action: 'incoming_call',
+            action: $callAction,
             senderId: $userId,
             senderName: Auth::user()->name,
-            senderAvatar: Auth::user()->avatar,
+            senderAvatar: Auth::user()->avatar_url,
+            targetUserId: $targetUserId,
             roomCode: $roomCode,
             callType: $type,
             payload: [
                 'meeting_id' => $meeting->id,
-                'is_group' => $conversation->is_group,
+                'is_group' => (bool)$conversation->is_group,
+                'mode' => $mode,
                 'title' => $conversation->name,
-            ]
+                'host_id' => $meeting->host_id,
+                'host_name' => Auth::user()->name,
+            ],
+            targetUserIds: $targetUserIds
         ))->toOthers();
 
         return response()->json([
@@ -92,6 +159,12 @@ class MeetingController extends Controller
             'meeting' => $meeting,
             'room_code' => $roomCode,
             'is_existing' => false,
+            'is_host' => true,
+            'is_group' => (bool)$conversation->is_group,
+            'mode' => $mode,
+            'host_id' => $meeting->host_id,
+            'host_name' => Auth::user()->name,
+            'existing_participants' => [],
         ], 201);
     }
 
@@ -125,16 +198,22 @@ class MeetingController extends Controller
         }
 
         // Phat tin hieu cho client khac
+        $targetUserIds = $conversation->participants()
+            ->where('user_id', '!=', $userId)
+            ->pluck('user_id')
+            ->toArray();
+
         broadcast(new CallSignalEvent(
             conversationId: $conversation->id,
             action: $action,
             senderId: $userId,
             senderName: Auth::user()->name,
-            senderAvatar: Auth::user()->avatar,
+            senderAvatar: Auth::user()->avatar_url,
             targetUserId: $targetUserId ? (int)$targetUserId : null,
             roomCode: $roomCode,
             callType: $callType,
-            payload: $payload
+            payload: $payload,
+            targetUserIds: $targetUserIds
         ))->toOthers();
 
         return response()->json(['success' => true]);
@@ -159,7 +238,7 @@ class MeetingController extends Controller
                     'conversation_id' => $conversation->id,
                     'user_id' => $meeting->host_id,
                     'type' => 'text',
-                    'body' => 'Cuoc goi nho',
+                    'body' => 'Cuộc gọi nhỡ',
                     'metadata' => [
                         'call_status' => 'missed',
                         'type' => $meeting->type,
@@ -168,14 +247,22 @@ class MeetingController extends Controller
             }
         }
 
+        $targetUserIds = $conversation->participants()
+            ->where('user_id', '!=', $userId)
+            ->pluck('user_id')
+            ->toArray();
+        $targetUserId = count($targetUserIds) === 1 ? (int)$targetUserIds[0] : null;
+
         broadcast(new CallSignalEvent(
             conversationId: $conversation->id,
             action: 'reject_call',
             senderId: $userId,
             senderName: Auth::user()->name,
-            senderAvatar: Auth::user()->avatar,
+            senderAvatar: Auth::user()->avatar_url,
+            targetUserId: $targetUserId,
             roomCode: $roomCode,
-            callType: $request->input('call_type', 'video')
+            callType: $request->input('call_type', 'video'),
+            targetUserIds: $targetUserIds
         ))->toOthers();
 
         return response()->json(['success' => true]);
@@ -186,6 +273,10 @@ class MeetingController extends Controller
     {
         $userId = Auth::id();
         $roomCode = $request->input('room_code');
+        $endForAll = $request->boolean('end_for_all');
+        $isMeetingEnded = false;
+        $newHostId = null;
+        $remainingParticipants = 0;
 
         if ($roomCode) {
             $meeting = Meeting::where('room_code', $roomCode)->first();
@@ -199,8 +290,8 @@ class MeetingController extends Controller
                     ->where('status', 'joined')
                     ->count();
 
-                // Neu khong con ai hoac cuoc goi 1-1 thi ket thuc
-                if ($remainingParticipants <= 1 || !$conversation->is_group) {
+                // Neu la 1-1 hoac khong con ai hoac chu phong chon ket thuc cho tat ca
+                if (!$conversation->is_group || $remainingParticipants <= 0 || ($endForAll && $meeting->host_id === $userId)) {
                     if ($meeting->status !== 'ended') {
                         $meeting->update([
                             'status' => 'ended',
@@ -208,35 +299,68 @@ class MeetingController extends Controller
                         ]);
 
                         $durationStr = $meeting->duration_formatted;
-                        $typeName = $meeting->type === 'voice' ? 'Cuoc goi thoai' : 'Cuoc goi video';
+                        $typeName = $conversation->is_group 
+                            ? 'Phòng học nhóm' 
+                            : ($meeting->type === 'voice' ? 'Cuộc gọi thoại' : 'Cuộc gọi video');
 
                         Message::create([
                             'conversation_id' => $conversation->id,
                             'user_id' => $meeting->host_id,
                             'type' => 'text',
-                            'body' => "{$typeName} da ket thuc. Thoi luong: {$durationStr}",
+                            'body' => "{$typeName} đã kết thúc. Thời lượng: {$durationStr}",
                             'metadata' => [
                                 'call_status' => 'ended',
                                 'duration_seconds' => $meeting->duration_seconds,
                                 'duration_formatted' => $durationStr,
                                 'type' => $meeting->type,
+                                'is_group' => (bool)$conversation->is_group,
                             ],
                         ]);
+                        $isMeetingEnded = true;
+                    }
+                } else {
+                    // Truong hop phong nhom van con nguoi: neu Host roi phong thi chuyen giao quyen Host
+                    if ($meeting->host_id === $userId) {
+                        $nextHost = MeetingParticipant::where('meeting_id', $meeting->id)
+                            ->where('status', 'joined')
+                            ->first();
+                        if ($nextHost) {
+                            $meeting->update(['host_id' => $nextHost->user_id]);
+                            $newHostId = $nextHost->user_id;
+                        }
                     }
                 }
             }
         }
 
+        $targetUserIds = $conversation->participants()
+            ->where('user_id', '!=', $userId)
+            ->pluck('user_id')
+            ->toArray();
+        $targetUserId = count($targetUserIds) === 1 ? (int)$targetUserIds[0] : null;
+
+        // Neu cuoc goi 1-1 hoac phong bi dong cho tat ca -> gui end_call; neu chi 1 thanh vien roi nhom -> gui participant_left
+        $leaveAction = (!$conversation->is_group || $isMeetingEnded) ? 'end_call' : 'participant_left';
+
         broadcast(new CallSignalEvent(
             conversationId: $conversation->id,
-            action: 'end_call',
+            action: $leaveAction,
             senderId: $userId,
             senderName: Auth::user()->name,
-            senderAvatar: Auth::user()->avatar,
+            senderAvatar: Auth::user()->avatar_url,
+            targetUserId: $targetUserId,
             roomCode: $roomCode,
-            callType: $request->input('call_type', 'video')
+            callType: $request->input('call_type', 'video'),
+            payload: [
+                'left_user_id' => $userId,
+                'left_user_name' => Auth::user()->name,
+                'new_host_id' => $newHostId,
+                'remaining_count' => $remainingParticipants,
+                'is_group' => (bool)$conversation->is_group,
+            ],
+            targetUserIds: $targetUserIds
         ))->toOthers();
 
-        return response()->json(['success' => true, 'message' => 'Da roi cuoc goi.']);
+        return response()->json(['success' => true, 'message' => 'Đã rời cuộc gọi.']);
     }
 }
