@@ -5,8 +5,12 @@
 <div id="msg-{{ $message->id }}" class="flex {{ $isMine ? 'justify-end' : 'justify-start' }}">
     <div class="flex gap-2 max-w-[75%] {{ $isMine ? 'flex-row-reverse' : 'flex-row' }}">
         @if(!$isMine)
-            <div class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 shrink-0 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 mt-1">
-                {{ strtoupper(substr($message->user->name, 0, 1)) }}
+            <div class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 shrink-0 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 mt-1 overflow-hidden">
+                @if($message->user && $message->user->avatar_url)
+                    <img src="{{ $message->user->avatar_url }}" alt="{{ $message->user->name }}" class="w-full h-full object-cover">
+                @else
+                    {{ strtoupper(substr($message->user->name, 0, 1)) }}
+                @endif
             </div>
         @endif
         <div>

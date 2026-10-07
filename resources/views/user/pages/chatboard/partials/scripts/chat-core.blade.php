@@ -14,6 +14,14 @@ function openModal(id) {
         if (container && container.children.length === 0) {
             addQuizQuestion();
         }
+    } else if (id === 'modal-user-settings') {
+        if (typeof switchSettingsTab === 'function') {
+            switchSettingsTab('profile');
+        }
+        const pErr = document.getElementById('profile-form-errors');
+        if (pErr) { pErr.classList.add('hidden'); pErr.innerHTML = ''; }
+        const pwErr = document.getElementById('password-form-errors');
+        if (pwErr) { pwErr.classList.add('hidden'); pwErr.innerHTML = ''; }
     }
 
     if (typeof lucide !== 'undefined' && lucide.createIcons) {

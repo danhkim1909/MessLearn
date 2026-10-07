@@ -43,6 +43,9 @@
     @include('user.pages.chatboard.partials.modals.modal-create-event')
     @include('user.pages.chatboard.partials.modals.modal-document-viewer')
     @include('user.pages.chatboard.partials.modals.modal-forward-message')
+    @include('user.pages.chatboard.partials.modals.modal-incoming-call')
+    @include('user.pages.chatboard.partials.modals.modal-meeting-room')
+    @include('user.pages.chatboard.partials.modals.modal-user-settings')
 
 @endsection
 
@@ -55,6 +58,8 @@
     @include('user.pages.chatboard.partials.scripts.image-canvas')
     @include('user.pages.chatboard.partials.scripts.mini-games')
     @include('user.pages.chatboard.partials.scripts.quiz')
+    @include('user.pages.chatboard.partials.scripts.meeting-webrtc')
 @endif
 @include('user.pages.chatboard.partials.scripts.chat-core')
+@include('user.pages.chatboard.partials.scripts.user-settings')
 @endsection

@@ -16,8 +16,12 @@
                     <i data-lucide="users" class="w-5 h-5"></i>
                 </div>
             @else
-                <div class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold">
-                    {{ strtoupper(substr($chatName, 0, 1)) }}
+                <div class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold overflow-hidden">
+                    @if(isset($otherUser) && $otherUser && $otherUser->avatar_url)
+                        <img src="{{ $otherUser->avatar_url }}" alt="{{ $chatName }}" class="w-full h-full object-cover">
+                    @else
+                        {{ strtoupper(substr($chatName, 0, 1)) }}
+                    @endif
                 </div>
             @endif
             <div>
@@ -26,9 +30,15 @@
             </div>
         </div>
 
-        <!-- Nut mo tim kiem tin nhan -->
-        <div class="flex items-center gap-2">
-            <button type="button" onclick="toggleChatSearch()" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Tìm kiếm tin nhắn">
+        <!-- Cac nut hanh dong tren Header: Goi thoai, Goi video, Tim kiem -->
+        <div class="flex items-center gap-1.5">
+            <button type="button" onclick="startCall('voice')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Goi thoai">
+                <i data-lucide="phone" class="w-5 h-5"></i>
+            </button>
+            <button type="button" onclick="startCall('video')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Goi video va Hop truc tuyen">
+                <i data-lucide="video" class="w-5 h-5"></i>
+            </button>
+            <button type="button" onclick="toggleChatSearch()" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Tim kiem tin nhan">
                 <i data-lucide="search" class="w-5 h-5"></i>
             </button>
         </div>

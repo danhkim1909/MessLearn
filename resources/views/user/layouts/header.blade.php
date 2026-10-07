@@ -23,11 +23,15 @@
 
         <div class="h-4 w-px bg-slate-200 dark:bg-slate-800"></div>
 
-        <div class="flex items-center gap-2">
-            <div class="w-7 h-7 rounded-xl bg-sky-500 text-white flex items-center justify-center font-bold text-xs">
-                {{ strtoupper(substr(Auth::user()->name ?? 'U', 0, 1)) }}
+        <div class="flex items-center gap-2 cursor-pointer" onclick="if(typeof openModal === 'function') openModal('modal-user-settings')">
+            <div id="header-user-avatar" class="w-7 h-7 rounded-xl bg-sky-500 text-white flex items-center justify-center font-bold text-xs overflow-hidden">
+                @if(Auth::user()->avatar_url)
+                    <img src="{{ Auth::user()->avatar_url }}" alt="{{ Auth::user()->name }}" class="w-full h-full object-cover">
+                @else
+                    <span>{{ strtoupper(substr(Auth::user()->name ?? 'U', 0, 1)) }}</span>
+                @endif
             </div>
-            <span class="text-xs font-semibold text-slate-700 dark:text-slate-200 hidden sm:inline">{{ Auth::user()->name ?? 'Người dùng' }}</span>
+            <span id="header-user-name" class="text-xs font-semibold text-slate-700 dark:text-slate-200 hidden sm:inline">{{ Auth::user()->name ?? 'Người dùng' }}</span>
         </div>
     </div>
 </header>

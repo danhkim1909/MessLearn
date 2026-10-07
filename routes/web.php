@@ -5,6 +5,7 @@ use App\Http\Controllers\Guest\AuthController;
 use App\Http\Controllers\User\ChatBoardController;
 use App\Http\Controllers\User\FriendshipController;
 use App\Http\Controllers\User\ConversationController;
+use App\Http\Controllers\User\ProfileController;
 use App\Http\Middleware\Authenication\CheckLoginMiddleware;
 use Illuminate\Support\Facades\Route;
 
@@ -27,6 +28,11 @@ Route::prefix('app')->middleware(CheckLoginMiddleware::class)->name('app.')->gro
         Route::post('/accept/{id}', [FriendshipController::class, 'acceptRequest'])->name('accept');
     });
 
+    Route::prefix('profile')->name('profile.')->group(function () {
+        Route::post('/update', [ProfileController::class, 'updateProfile'])->name('update');
+        Route::post('/password', [ProfileController::class, 'updatePassword'])->name('password');
+    });
+
     Route::prefix('conversation')->name('conversation.')->group(function () {
         Route::post('/group', [ConversationController::class, 'storeGroup'])->name('store-group');
         Route::post('/{conversation}/message', [\App\Http\Controllers\User\MessageController::class, 'store'])->name('message.store');
@@ -45,5 +51,11 @@ Route::prefix('app')->middleware(CheckLoginMiddleware::class)->name('app.')->gro
         Route::get('/{conversation}/quiz/{form}', [\App\Http\Controllers\User\QuizController::class, 'show'])->name('quiz.show');
         Route::post('/{conversation}/quiz/{form}/submit', [\App\Http\Controllers\User\QuizController::class, 'submit'])->name('quiz.submit');
         Route::get('/{conversation}/quiz/{form}/results', [\App\Http\Controllers\User\QuizController::class, 'results'])->name('quiz.results');
+
+        // Cuoc goi va phong hop truc tuyen WebRTC
+        Route::post('/{conversation}/meeting/start', [\App\Http\Controllers\User\MeetingController::class, 'start'])->name('meeting.start');
+        Route::post('/{conversation}/meeting/signal', [\App\Http\Controllers\User\MeetingController::class, 'signal'])->name('meeting.signal');
+        Route::post('/{conversation}/meeting/leave', [\App\Http\Controllers\User\MeetingController::class, 'leave'])->name('meeting.leave');
+        Route::post('/{conversation}/meeting/reject', [\App\Http\Controllers\User\MeetingController::class, 'reject'])->name('meeting.reject');
     });
 });

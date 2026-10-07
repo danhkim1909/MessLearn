@@ -55,4 +55,9 @@ class Conversation extends Model
             'user_id'
         );
     }
+
+    public function meetings(): HasMany
+    {
+        return $this->hasMany(Meeting::class);
+    }
 }

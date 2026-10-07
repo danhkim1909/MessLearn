@@ -86,7 +86,7 @@ class FriendshipController extends Controller
                 'id' => $targetUser->id,
                 'name' => $targetUser->name,
                 'email' => $targetUser->email,
-                'avatar' => $targetUser->avatar,
+                'avatar' => $targetUser->avatar_url,
             ],
             'relationship' => [
                 'status' => $status,
