@@ -22,7 +22,7 @@ class FriendshipController extends Controller
                 'message' => 'Vui lòng nhập địa chỉ email cần tìm kiếm.'
             ], 400);
         }
-
+        
         $targetUser = User::where('email', $email)->first();
         if (!$targetUser) {
             return response()->json([
