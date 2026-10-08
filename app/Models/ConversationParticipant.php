@@ -15,13 +15,26 @@ class ConversationParticipant extends Model
         'user_id',
         'role',
         'last_read_at',
+        'is_pinned',
+        'nickname',
+        'muted_until',
+        'last_read_message_id',
     ];
 
     protected function casts(): array
     {
         return [
             'last_read_at' => 'datetime',
+            'is_pinned' => 'boolean',
+            'muted_until' => 'datetime',
+            'last_read_message_id' => 'integer',
         ];
+    }
+
+    // Helper methods
+    public function isMuted(): bool
+    {
+        return !is_null($this->muted_until) && $this->muted_until->isFuture();
     }
 
     // Relationships

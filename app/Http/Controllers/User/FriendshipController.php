@@ -450,4 +450,29 @@ class FriendshipController extends Controller
             'message' => 'Đã bỏ chặn người dùng thành công.'
         ]);
     }
+
+    public function getBlockedUsers()
+    {
+        $userId = Auth::id();
+        $blocks = UserBlock::where('blocker_id', $userId)
+            ->with('blocked:id,name,email,avatar')
+            ->latest('created_at')
+            ->get()
+            ->map(function ($b) {
+                return [
+                    'id' => $b->blocked?->id,
+                    'name' => $b->blocked?->name ?? 'Người dùng',
+                    'email' => $b->blocked?->email ?? '',
+                    'avatar' => $b->blocked?->avatar_url ?? null,
+                    'blocked_at' => $b->created_at ? $b->created_at->format('d/m/Y') : '',
+                ];
+            })
+            ->filter(fn ($u) => !empty($u['id']))
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'blocked_users' => $blocks,
+        ]);
+    }
 }

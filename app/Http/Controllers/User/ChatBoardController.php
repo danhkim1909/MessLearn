@@ -32,7 +32,8 @@ class ChatBoardController extends Controller
             ->with(['participants.user', 'messages' => function ($query) {
                 $query->latest()->limit(1);
             }])
-            ->orderByDesc('updated_at')
+            ->orderByDesc('conversation_participants.is_pinned')
+            ->orderByDesc('conversations.updated_at')
             ->get();
 
         return compact('pendingRequests', 'friends', 'conversations');
@@ -98,8 +99,11 @@ class ChatBoardController extends Controller
             ->latest('id')
             ->first();
 
+        $currentParticipant = $conversation->participants()->where('user_id', $userId)->first();
+
         $data = $this->getSidebarData();
         $data['activeConversation'] = $conversation;
+        $data['currentParticipant'] = $currentParticipant;
         $data['hasMoreMessages'] = $hasMoreMessages;
         $data['oldestMessageId'] = $oldestMessageId;
         $data['pinnedMessage'] = $pinnedMessage;

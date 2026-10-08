@@ -39,6 +39,14 @@ class MeetingController extends Controller
                     return response()->json(['message' => 'Không thể thực hiện cuộc gọi do có chặn liên hệ.'], 403);
                 }
             }
+        } else {
+            // Kiem tra quyen bat dau cuoc goi trong nhom
+            if (!$conversation->canMemberStartCall()) {
+                $isAdmin = $conversation->participants()->where('user_id', $userId)->where('role', 'admin')->exists();
+                if (!$isAdmin) {
+                    return response()->json(['message' => 'Chỉ Trưởng nhóm mới có quyền bắt đầu cuộc gọi trong nhóm này.'], 403);
+                }
+            }
         }
 
         $type = $request->input('type', 'video');

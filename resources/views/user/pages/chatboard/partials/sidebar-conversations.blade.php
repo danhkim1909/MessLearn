@@ -58,12 +58,17 @@
             @foreach($conversations ?? [] as $conv)
                 @php
                     $isGroup = $conv->is_group;
+                    $myParticipant = $conv->participants->where('user_id', Auth::id())->first();
+                    $isPinned = $myParticipant?->is_pinned ?? false;
+                    $isMuted = $myParticipant ? $myParticipant->isMuted() : false;
+                    $customNickname = $myParticipant?->nickname;
+
                     if ($isGroup) {
-                        $name = $conv->name;
+                        $name = $customNickname ?: $conv->name;
                         $avatarChar = strtoupper(substr($name, 0, 1));
                     } else {
                         $otherUser = $conv->participants->where('user_id', '!=', Auth::id())->first()->user ?? null;
-                        $name = $otherUser ? $otherUser->name : 'Người dùng';
+                        $name = $customNickname ?: ($otherUser ? $otherUser->name : 'Người dùng');
                         $avatarChar = strtoupper(substr($name, 0, 1));
                     }
                     $isActive = isset($activeConversation) && $activeConversation->id === $conv->id;
@@ -74,8 +79,12 @@
                     
                     <div class="relative shrink-0">
                         @if($isGroup)
-                            <div class="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-500 flex items-center justify-center font-bold text-sm">
-                                <i data-lucide="users" class="w-5 h-5"></i>
+                            <div class="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-500 flex items-center justify-center font-bold text-sm overflow-hidden">
+                                @if($conv->avatar_url)
+                                    <img src="{{ $conv->avatar_url }}" alt="{{ $name }}" class="w-full h-full object-cover">
+                                @else
+                                    <i data-lucide="users" class="w-5 h-5"></i>
+                                @endif
                             </div>
                         @else
                             <div class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold text-sm overflow-hidden">
@@ -90,7 +99,17 @@
                     </div>
 
                     <div class="flex-1 min-w-0">
-                        <h3 class="font-bold text-sm text-slate-900 dark:text-white truncate">{{ $name }}</h3>
+                        <div class="flex items-center justify-between gap-1">
+                            <h3 class="font-bold text-sm text-slate-900 dark:text-white truncate">{{ $name }}</h3>
+                            <div class="flex items-center gap-1 shrink-0">
+                                @if($isMuted)
+                                    <i data-lucide="bell-off" class="w-3.5 h-3.5 text-slate-400" title="Đang tắt thông báo"></i>
+                                @endif
+                                @if($isPinned)
+                                    <i data-lucide="pin" class="w-3.5 h-3.5 text-amber-500 fill-amber-500" title="Đã ghim"></i>
+                                @endif
+                            </div>
+                        </div>
                         <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
                             {{ $isGroup ? 'Nhóm học tập' : 'Trò chuyện cá nhân' }}
                         </p>

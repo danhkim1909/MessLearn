@@ -237,6 +237,11 @@ class ConversationController extends Controller
             return response()->json(['message' => 'Chức năng chỉ hỗ trợ cho nhóm học tập.'], 400);
         }
 
+        $isAdmin = $conversation->participants()->where('user_id', $userId)->where('role', 'admin')->exists();
+        if (!$conversation->canMemberInvite() && !$isAdmin) {
+            return response()->json(['message' => 'Chỉ Trưởng nhóm mới có quyền thêm thành viên vào nhóm này.'], 403);
+        }
+
         $request->validate([
             'user_ids' => 'required|array|min:1',
             'user_ids.*' => 'exists:users,id',
@@ -373,6 +378,241 @@ class ConversationController extends Controller
             'success' => true,
             'message' => 'Bạn đã rời khỏi nhóm học tập.',
             'redirect_url' => route('app.chat-board'),
+        ]);
+    }
+
+    // --- Lay thong tin & cai dat nhom hoc tap ---
+    public function getGroupInfo(Conversation $conversation)
+    {
+        $userId = Auth::id();
+        if (!$conversation->participants()->where('user_id', $userId)->exists()) {
+            return response()->json(['message' => 'Từ chối truy cập.'], 403);
+        }
+
+        if (!$conversation->is_group) {
+            return response()->json(['message' => 'Chức năng chỉ hỗ trợ cho nhóm học tập.'], 400);
+        }
+
+        $isAdmin = $conversation->participants()->where('user_id', $userId)->where('role', 'admin')->exists();
+
+        return response()->json([
+            'success' => true,
+            'group' => [
+                'id' => $conversation->id,
+                'title' => $conversation->title,
+                'avatar' => $conversation->avatar_url,
+                'description' => $conversation->description ?? '',
+                'settings' => [
+                    'read_only' => $conversation->isReadOnly(),
+                    'allow_member_start_call' => $conversation->canMemberStartCall(),
+                    'allow_member_invite' => $conversation->canMemberInvite(),
+                ],
+                'is_admin' => $isAdmin,
+                'member_count' => $conversation->participants()->count(),
+                'created_at' => $conversation->created_at ? $conversation->created_at->format('d/m/Y') : '',
+            ]
+        ]);
+    }
+
+    // --- Cap nhat thong tin nhom hoc tap (Ten, mo ta, avatar) ---
+    public function updateGroupInfo(Request $request, Conversation $conversation)
+    {
+        $userId = Auth::id();
+        $isAdmin = $conversation->participants()->where('user_id', $userId)->where('role', 'admin')->exists();
+
+        if (!$isAdmin) {
+            return response()->json(['message' => 'Chỉ Trưởng nhóm mới có quyền chỉnh sửa thông tin nhóm.'], 403);
+        }
+
+        if (!$conversation->is_group) {
+            return response()->json(['message' => 'Chức năng chỉ hỗ trợ cho nhóm học tập.'], 400);
+        }
+
+        $request->validate([
+            'title' => 'required|string|max:100',
+            'description' => 'nullable|string|max:1000',
+            'avatar' => 'nullable|image|max:2048',
+        ], [
+            'title.required' => 'Vui lòng nhập tên nhóm.',
+            'title.max' => 'Tên nhóm không được vượt quá 100 ký tự.',
+            'description.max' => 'Mô tả nhóm không được vượt quá 1000 ký tự.',
+            'avatar.image' => 'Ảnh đại diện nhóm không hợp lệ.',
+            'avatar.max' => 'Dung lượng ảnh tối đa 2MB.',
+        ]);
+
+        $oldTitle = $conversation->title;
+        $conversation->title = $request->input('title');
+        $conversation->description = $request->input('description');
+
+        if ($request->hasFile('avatar')) {
+            $path = $request->file('avatar')->store('avatars/groups', 'public');
+            $conversation->avatar = $path;
+        }
+
+        $conversation->save();
+
+        // Tao tin nhan he thong
+        $sysMsgText = Auth::user()->name . " đã cập nhật thông tin nhóm học tập.";
+        if ($oldTitle !== $conversation->title) {
+            $sysMsgText = Auth::user()->name . " đã đổi tên nhóm thành \"{$conversation->title}\".";
+        }
+
+        $sysMsg = Message::create([
+            'conversation_id' => $conversation->id,
+            'user_id' => $userId,
+            'type' => 'text',
+            'body' => $sysMsgText,
+            'metadata' => ['is_system' => true]
+        ]);
+
+        $sysMsg->load('user:id,name,avatar');
+        broadcast(new MessageSent($sysMsg))->toOthers();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã cập nhật thông tin nhóm thành công.',
+            'group' => [
+                'id' => $conversation->id,
+                'title' => $conversation->title,
+                'avatar' => $conversation->avatar_url,
+                'description' => $conversation->description,
+            ],
+            'system_message' => $sysMsg,
+        ]);
+    }
+
+    // --- Cap nhat cai dat quyen han nhom hoc tap ---
+    public function updateGroupSettings(Request $request, Conversation $conversation)
+    {
+        $userId = Auth::id();
+        $isAdmin = $conversation->participants()->where('user_id', $userId)->where('role', 'admin')->exists();
+
+        if (!$isAdmin) {
+            return response()->json(['message' => 'Chỉ Trưởng nhóm mới có quyền cài đặt quyền hạn nhóm.'], 403);
+        }
+
+        if (!$conversation->is_group) {
+            return response()->json(['message' => 'Chức năng chỉ hỗ trợ cho nhóm học tập.'], 400);
+        }
+
+        $request->validate([
+            'read_only' => 'required|boolean',
+            'allow_member_start_call' => 'required|boolean',
+            'allow_member_invite' => 'required|boolean',
+        ]);
+
+        $oldReadOnly = $conversation->isReadOnly();
+        $newReadOnly = (bool)$request->input('read_only');
+
+        $conversation->settings = [
+            'read_only' => $newReadOnly,
+            'allow_member_start_call' => (bool)$request->input('allow_member_start_call'),
+            'allow_member_invite' => (bool)$request->input('allow_member_invite'),
+        ];
+        $conversation->save();
+
+        // Neu thay doi che do chi doc thi phat thong bao he thong
+        if ($oldReadOnly !== $newReadOnly) {
+            $body = $newReadOnly
+                ? Auth::user()->name . " đã bật chế độ Chỉ đọc (Chỉ Trưởng nhóm mới có thể gửi tin nhắn)."
+                : Auth::user()->name . " đã tắt chế độ Chỉ đọc (Tất cả thành viên đều có thể gửi tin nhắn).";
+
+            $sysMsg = Message::create([
+                'conversation_id' => $conversation->id,
+                'user_id' => $userId,
+                'type' => 'text',
+                'body' => $body,
+                'metadata' => ['is_system' => true]
+            ]);
+
+            $sysMsg->load('user:id,name,avatar');
+            broadcast(new MessageSent($sysMsg))->toOthers();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã cập nhật cài đặt nhóm thành công.',
+            'settings' => $conversation->settings,
+        ]);
+    }
+
+    // --- Ghim / Bo ghim cuoc tro chuyen tren sidebar ---
+    public function togglePin(Conversation $conversation)
+    {
+        $userId = Auth::id();
+        $participant = $conversation->participants()->where('user_id', $userId)->first();
+        if (!$participant) {
+            return response()->json(['message' => 'Bạn không thuộc cuộc trò chuyện này.'], 403);
+        }
+
+        $participant->is_pinned = !$participant->is_pinned;
+        $participant->save();
+
+        return response()->json([
+            'success' => true,
+            'is_pinned' => $participant->is_pinned,
+            'message' => $participant->is_pinned ? 'Đã ghim cuộc trò chuyện lên đầu.' : 'Đã bỏ ghim cuộc trò chuyện.',
+        ]);
+    }
+
+    // --- Bat / Tat thong bao cuoc tro chuyen (Mute) ---
+    public function updateMute(Request $request, Conversation $conversation)
+    {
+        $userId = Auth::id();
+        $participant = $conversation->participants()->where('user_id', $userId)->first();
+        if (!$participant) {
+            return response()->json(['message' => 'Bạn không thuộc cuộc trò chuyện này.'], 403);
+        }
+
+        $request->validate([
+            'duration' => 'required|in:1h,8h,forever,unmute',
+        ]);
+
+        $duration = $request->input('duration');
+        if ($duration === 'unmute') {
+            $participant->muted_until = null;
+            $message = 'Đã bật lại thông báo cuộc trò chuyện.';
+        } elseif ($duration === '1h') {
+            $participant->muted_until = now()->addHour();
+            $message = 'Đã tắt thông báo trong 1 giờ.';
+        } elseif ($duration === '8h') {
+            $participant->muted_until = now()->addHours(8);
+            $message = 'Đã tắt thông báo trong 8 giờ.';
+        } else {
+            $participant->muted_until = now()->addYears(50);
+            $message = 'Đã tắt thông báo cho đến khi bạn bật lại.';
+        }
+
+        $participant->save();
+
+        return response()->json([
+            'success' => true,
+            'is_muted' => $participant->isMuted(),
+            'muted_until' => $participant->muted_until ? $participant->muted_until->toIso8601String() : null,
+            'message' => $message,
+        ]);
+    }
+
+    // --- Cap nhat biet danh cuoc tro chuyen ---
+    public function updateNickname(Request $request, Conversation $conversation)
+    {
+        $userId = Auth::id();
+        $participant = $conversation->participants()->where('user_id', $userId)->first();
+        if (!$participant) {
+            return response()->json(['message' => 'Bạn không thuộc cuộc trò chuyện này.'], 403);
+        }
+
+        $request->validate([
+            'nickname' => 'nullable|string|max:100',
+        ]);
+
+        $participant->nickname = $request->input('nickname');
+        $participant->save();
+
+        return response()->json([
+            'success' => true,
+            'nickname' => $participant->nickname,
+            'message' => 'Đã cập nhật biệt danh cuộc trò chuyện thành công.',
         ]);
     }
 }

@@ -26,6 +26,12 @@ return new class extends Migration
             // Ảnh đại diện của phòng chat (nếu là nhóm)
             $table->string('avatar')->nullable()->comment('Ảnh đại diện nhóm');
             
+            // Mô tả mục tiêu hoạt động của nhóm
+            $table->text('description')->nullable()->comment('Mô tả mục tiêu hoạt động của nhóm');
+
+            // Cài đặt quyền hạn phòng chat (chỉ đọc, ai được gọi, ai được mời)
+            $table->json('settings')->nullable()->comment('Cài đặt quyền hạn phòng chat');
+            
             $table->timestamps();
         });
 
@@ -51,6 +57,18 @@ return new class extends Migration
             // Đánh dấu thời điểm đọc tin cuối để tính số tin nhắn chưa đọc
             $table->timestamp('last_read_at')->nullable()->comment('Thời gian xem tin nhắn gần nhất');
             
+            // Ghim cuộc trò chuyện lên đầu danh sách
+            $table->boolean('is_pinned')->default(false)->comment('Ghim cuộc trò chuyện lên đầu danh sách');
+
+            // Biệt danh riêng trong cuộc trò chuyện
+            $table->string('nickname', 100)->nullable()->comment('Biệt danh riêng trong cuộc trò chuyện');
+
+            // Thời điểm hết hạn tắt thông báo
+            $table->timestamp('muted_until')->nullable()->comment('Thời điểm hết hạn tắt thông báo');
+
+            // ID tin nhắn đã đọc gần nhất
+            $table->unsignedBigInteger('last_read_message_id')->nullable()->comment('ID tin nhắn đã đọc gần nhất');
+
             $table->timestamps();
 
             // Mỗi người dùng chỉ xuất hiện 1 lần trong 1 cuộc trò chuyện

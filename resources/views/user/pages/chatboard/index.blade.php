@@ -49,6 +49,7 @@
     @include('user.pages.chatboard.partials.modals.modal-group-members')
     @include('user.pages.chatboard.partials.modals.modal-partner-profile')
     @include('user.pages.chatboard.partials.modals.modal-user-settings')
+    @include('user.pages.chatboard.partials.modals.modal-change-nickname')
 
 @endsection
 

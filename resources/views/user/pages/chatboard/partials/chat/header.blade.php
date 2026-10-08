@@ -1,23 +1,41 @@
 <!-- Header Chat -->
-<div class="relative border-b border-slate-200 dark:border-slate-800 shrink-0">
+<div id="chat-header-main" 
+     class="relative border-b border-slate-200 dark:border-slate-800 shrink-0"
+     data-conversation-id="{{ $activeConversation->id }}"
+     data-is-pinned="{{ ($currentParticipant?->is_pinned ?? false) ? '1' : '0' }}"
+     data-is-muted="{{ ($currentParticipant && $currentParticipant->isMuted()) ? '1' : '0' }}"
+     data-nickname="{{ $currentParticipant?->nickname ?? '' }}"
+     data-original-name="{{ $activeConversation->is_group ? $activeConversation->name : (($activeConversation->participants->where('user_id', '!=', Auth::id())->first()->user?->name) ?? 'Nguoi dung') }}">
     <div class="h-16 flex items-center justify-between px-6">
         <div class="flex items-center gap-3">
             @php
                 $isGroup = $activeConversation->is_group;
+                $customNickname = $currentParticipant?->nickname;
                 if ($isGroup) {
-                    $chatName = $activeConversation->name;
+                    $originalName = $activeConversation->name;
+                    $chatName = $customNickname ?: $originalName;
                 } else {
                     $otherUser = $activeConversation->participants->where('user_id', '!=', Auth::id())->first()->user ?? null;
-                    $chatName = $otherUser ? $otherUser->name : 'Nguoi dung';
+                    $originalName = $otherUser ? $otherUser->name : 'Nguoi dung';
+                    $chatName = $customNickname ?: $originalName;
                 }
+                $isPinned = $currentParticipant?->is_pinned ?? false;
+                $isMuted = $currentParticipant ? $currentParticipant->isMuted() : false;
             @endphp
             @if($isGroup)
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-500 flex items-center justify-center font-bold">
-                        <i data-lucide="users" class="w-5 h-5"></i>
+                <div onclick="openGroupMembersModal()" class="flex items-center gap-3 cursor-pointer group" title="Xem thông tin & quản lý nhóm">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-500 flex items-center justify-center font-bold overflow-hidden transition-transform group-hover:scale-105">
+                        @if($activeConversation->avatar_url)
+                            <img src="{{ $activeConversation->avatar_url }}" alt="{{ $chatName }}" class="w-full h-full object-cover">
+                        @else
+                            <i data-lucide="users" class="w-5 h-5"></i>
+                        @endif
                     </div>
                     <div>
-                        <h2 class="font-extrabold text-slate-900 dark:text-white">{{ $chatName }}</h2>
+                        <h2 id="chat-header-group-title" class="font-extrabold text-slate-900 dark:text-white group-hover:text-indigo-500 transition-colors flex items-center gap-1.5">
+                            <span id="chat-header-name-text">{{ $chatName }}</span>
+                            <span id="chat-header-original-badge" class="text-[10px] font-normal text-slate-400 {{ $customNickname ? '' : 'hidden' }}">({{ $originalName }})</span>
+                        </h2>
                         <p id="chat-header-status" class="text-xs text-emerald-500 font-medium">Đang hoạt động</p>
                     </div>
                 </div>
@@ -31,14 +49,17 @@
                         @endif
                     </div>
                     <div>
-                        <h2 class="font-extrabold text-slate-900 dark:text-white group-hover:text-sky-500 transition-colors">{{ $chatName }}</h2>
+                        <h2 id="chat-header-user-title" class="font-extrabold text-slate-900 dark:text-white group-hover:text-sky-500 transition-colors flex items-center gap-1.5">
+                            <span id="chat-header-name-text">{{ $chatName }}</span>
+                            <span id="chat-header-original-badge" class="text-[10px] font-normal text-slate-400 {{ $customNickname ? '' : 'hidden' }}">({{ $originalName }})</span>
+                        </h2>
                         <p id="chat-header-status" class="text-xs text-emerald-500 font-medium">Đang hoạt động</p>
                     </div>
                 </div>
             @endif
         </div>
 
-        <!-- Cac nut hanh dong tren Header: Goi thoai, Goi video, Phong hoc nhom, Tim kiem -->
+        <!-- Cac nut hanh dong tren Header: Goi thoai, Goi video, Phong hoc nhom, Tim kiem, Ghim, Thong bao, Biet danh -->
         <div class="flex items-center gap-1.5">
             @if($isGroup)
                 <!-- 1. Goi thoai nhom (Do chuong ca nhom) -->
@@ -70,11 +91,67 @@
                     <i data-lucide="info" class="w-5 h-5"></i>
                 </button>
             @endif
+
+            <!-- 5. Tim kiem tin nhan -->
             <button type="button" onclick="toggleChatSearch()" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Tìm kiếm tin nhắn">
                 <i data-lucide="search" class="w-5 h-5"></i>
             </button>
+
+            <!-- 6. Ghim cuoc tro chuyen (Pin) -->
+            <button type="button" 
+                    id="btn-header-pin-chat" 
+                    onclick="handleTogglePinChat()" 
+                    class="p-2 {{ $isPinned ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/30' : 'text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800' }} rounded-xl transition-all" 
+                    title="{{ $isPinned ? 'Bỏ ghim cuộc trò chuyện' : 'Ghim cuộc trò chuyện lên đầu' }}">
+                <i data-lucide="pin" class="w-5 h-5 {{ $isPinned ? 'fill-amber-500' : '' }}"></i>
+            </button>
+
+            <!-- 7. Tat / Bat thong bao (Mute) -->
+            <div class="relative" id="header-mute-container">
+                <button type="button" 
+                        id="btn-header-mute-chat" 
+                        onclick="toggleMuteDropdown(event)" 
+                        class="p-2 {{ $isMuted ? 'text-rose-500 bg-rose-50 dark:bg-rose-950/30' : 'text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800' }} rounded-xl transition-all" 
+                        title="{{ $isMuted ? 'Đang tắt thông báo (Nhấn để tùy chỉnh)' : 'Tắt thông báo cuộc trò chuyện' }}">
+                    <i data-lucide="{{ $isMuted ? 'bell-off' : 'bell' }}" class="w-5 h-5"></i>
+                </button>
+                <div id="header-mute-dropdown" class="hidden absolute right-0 mt-2 w-52 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl py-1.5 z-50 text-xs">
+                    <div class="px-3.5 py-1.5 font-bold text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700/60 uppercase tracking-wider text-[10px]">
+                        Cài đặt thông báo
+                    </div>
+                    <div id="mute-unmute-option-wrap" class="{{ $isMuted ? '' : 'hidden' }}">
+                        <button type="button" onclick="handleSelectMuteDuration('unmute')" class="w-full text-left px-3.5 py-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-semibold flex items-center gap-2">
+                            <i data-lucide="bell" class="w-4 h-4"></i>
+                            <span>Bật lại thông báo</span>
+                        </button>
+                        <div class="border-t border-slate-100 dark:border-slate-700/60 my-1"></div>
+                    </div>
+                    <button type="button" onclick="handleSelectMuteDuration('1h')" class="w-full text-left px-3.5 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                        <span>Tắt trong 1 giờ</span>
+                        <span class="text-[10px] text-slate-400">1h</span>
+                    </button>
+                    <button type="button" onclick="handleSelectMuteDuration('8h')" class="w-full text-left px-3.5 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                        <span>Tắt trong 8 giờ</span>
+                        <span class="text-[10px] text-slate-400">8h</span>
+                    </button>
+                    <button type="button" onclick="handleSelectMuteDuration('forever')" class="w-full text-left px-3.5 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                        <span>Cho đến khi mở lại</span>
+                        <i data-lucide="bell-off" class="w-3.5 h-3.5 text-slate-400"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 8. Dat biet danh cuoc tro chuyen -->
+            <button type="button" 
+                    id="btn-header-nickname" 
+                    onclick="openChangeNicknameModal()" 
+                    class="p-2 text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" 
+                    title="Đặt biệt danh">
+                <i data-lucide="tag" class="w-5 h-5"></i>
+            </button>
         </div>
     </div>
+
 
     <!-- Thanh Banner Phong hoc nhom dang mo (Active Group Meeting Banner) -->
     @php

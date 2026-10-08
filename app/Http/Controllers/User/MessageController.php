@@ -41,6 +41,14 @@ class MessageController extends Controller
                         return response()->json(['message' => 'Không thể gửi tin nhắn do có chặn liên hệ giữa hai bên.'], 403);
                     }
                 }
+            } else {
+                // Kiem tra che do Chi doc (Read Only) cua nhom hoc tap
+                if ($conversation->isReadOnly()) {
+                    $isAdmin = $conversation->participants()->where('user_id', $userId)->where('role', 'admin')->exists();
+                    if (!$isAdmin) {
+                        return response()->json(['message' => 'Nhóm đang ở chế độ Chỉ đọc. Chỉ Trưởng nhóm mới có thể gửi tin nhắn.'], 403);
+                    }
+                }
             }
 
             $hasAudio = $request->hasFile('audio');

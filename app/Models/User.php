@@ -65,7 +65,8 @@ class User extends Authenticatable
 
     public function conversations()
     {
-        return $this->belongsToMany(Conversation::class, 'conversation_participants');
+        return $this->belongsToMany(Conversation::class, 'conversation_participants')
+            ->withPivot(['role', 'is_pinned', 'nickname', 'muted_until', 'last_read_message_id', 'last_read_at']);
     }
 
     public function conversationParticipants(): HasMany

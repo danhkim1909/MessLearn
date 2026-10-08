@@ -15,6 +15,12 @@ class Conversation extends Model
         'type',
         'title',
         'avatar',
+        'description',
+        'settings',
+    ];
+
+    protected $casts = [
+        'settings' => 'array',
     ];
 
     // Accessors
@@ -26,6 +32,33 @@ class Conversation extends Model
     public function getNameAttribute(): ?string
     {
         return $this->title;
+    }
+
+    public function getAvatarUrlAttribute(): ?string
+    {
+        if (!$this->avatar) {
+            return null;
+        }
+        if (str_starts_with($this->avatar, 'http://') || str_starts_with($this->avatar, 'https://')) {
+            return $this->avatar;
+        }
+        return asset('storage/' . $this->avatar);
+    }
+
+    // Permission Helpers
+    public function isReadOnly(): bool
+    {
+        return (bool)($this->settings['read_only'] ?? false);
+    }
+
+    public function canMemberStartCall(): bool
+    {
+        return (bool)($this->settings['allow_member_start_call'] ?? true);
+    }
+
+    public function canMemberInvite(): bool
+    {
+        return (bool)($this->settings['allow_member_invite'] ?? true);
     }
 
     // Relationships

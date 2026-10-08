@@ -31,6 +31,10 @@
                 <i data-lucide="palette" class="w-4 h-4"></i>
                 <span>Giao diện</span>
             </button>
+            <button type="button" id="tab-btn-blocks" onclick="switchSettingsTab('blocks')" class="flex items-center gap-2 py-3 px-3 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors">
+                <i data-lucide="shield-alert" class="w-4 h-4"></i>
+                <span>Danh sách chặn</span>
+            </button>
         </div>
 
         <!-- Body Noi dung Modal -->
@@ -174,6 +178,36 @@
                             <span class="text-xs font-bold">Giao diện Tối</span>
                         </button>
                     </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: DANH SACH NGUOI DUNG DA CHAN -->
+            <div id="tab-content-blocks" class="hidden space-y-4">
+                <div class="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-700/60">
+                    <div>
+                        <h4 class="font-bold text-sm text-slate-900 dark:text-white">Danh sách người dùng đã chặn</h4>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Những người này không thể gửi tin nhắn hoặc gọi điện cho bạn.</p>
+                    </div>
+                    <button type="button" onclick="loadBlockedUsersList()" class="p-1.5 text-slate-400 hover:text-sky-500 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" title="Làm mới danh sách">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <div id="blocked-users-loading" class="text-center py-8">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-sky-500 border-t-transparent mb-2"></div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Đang tải danh sách chặn...</p>
+                </div>
+
+                <div id="blocked-users-empty" class="hidden text-center py-8 px-4 border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30">
+                    <div class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-2">
+                        <i data-lucide="shield-check" class="w-5 h-5 text-emerald-500"></i>
+                    </div>
+                    <p class="text-xs font-bold text-slate-700 dark:text-slate-300">Không có người dùng nào bị chặn</p>
+                    <p class="text-[11px] text-slate-400 mt-0.5">Danh sách những người bạn chặn sẽ hiển thị tại đây.</p>
+                </div>
+
+                <div id="blocked-users-list" class="space-y-2 hidden max-h-64 overflow-y-auto pr-1">
+                    <!-- Render dong qua JavaScript -->
                 </div>
             </div>
         </div>

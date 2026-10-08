@@ -32,6 +32,7 @@ Route::prefix('app')->middleware(CheckLoginMiddleware::class)->name('app.')->gro
     });
 
     Route::prefix('user')->name('user.')->group(function () {
+        Route::get('/blocks', [FriendshipController::class, 'getBlockedUsers'])->name('blocks');
         Route::get('/{user}/profile', [FriendshipController::class, 'getPartnerProfile'])->name('profile');
         Route::post('/{user}/block', [FriendshipController::class, 'blockUser'])->name('block');
         Route::post('/{user}/unblock', [FriendshipController::class, 'unblockUser'])->name('unblock');
@@ -45,6 +46,12 @@ Route::prefix('app')->middleware(CheckLoginMiddleware::class)->name('app.')->gro
     Route::prefix('conversation')->name('conversation.')->group(function () {
         Route::post('/direct', [ConversationController::class, 'getOrCreateDirectConversation'])->name('direct');
         Route::post('/group', [ConversationController::class, 'storeGroup'])->name('store-group');
+        Route::get('/{conversation}/info', [ConversationController::class, 'getGroupInfo'])->name('info');
+        Route::post('/{conversation}/info', [ConversationController::class, 'updateGroupInfo'])->name('update-info');
+        Route::post('/{conversation}/settings', [ConversationController::class, 'updateGroupSettings'])->name('update-settings');
+        Route::post('/{conversation}/pin', [ConversationController::class, 'togglePin'])->name('pin');
+        Route::post('/{conversation}/mute', [ConversationController::class, 'updateMute'])->name('mute');
+        Route::post('/{conversation}/nickname', [ConversationController::class, 'updateNickname'])->name('nickname');
         Route::get('/{conversation}/members', [ConversationController::class, 'getMembers'])->name('members');
         Route::get('/{conversation}/members/available-friends', [ConversationController::class, 'getAvailableFriends'])->name('members.available-friends');
         Route::post('/{conversation}/members/add', [ConversationController::class, 'addMembers'])->name('members.add');

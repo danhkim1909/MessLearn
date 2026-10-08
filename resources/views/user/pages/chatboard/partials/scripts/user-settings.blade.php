@@ -4,7 +4,7 @@
 // -------------------------------------------------------------
 
 function switchSettingsTab(tabName) {
-    const tabs = ['profile', 'security', 'appearance'];
+    const tabs = ['profile', 'security', 'appearance', 'blocks'];
     tabs.forEach(tab => {
         const btn = document.getElementById(`tab-btn-${tab}`);
         const content = document.getElementById(`tab-content-${tab}`);
@@ -25,6 +25,10 @@ function switchSettingsTab(tabName) {
             }
         }
     });
+
+    if (tabName === 'blocks') {
+        loadBlockedUsersList();
+    }
 
     if (typeof lucide !== 'undefined' && lucide.createIcons) {
         lucide.createIcons();
@@ -354,6 +358,90 @@ async function submitPasswordForm(event) {
     } finally {
         if (submitBtn) submitBtn.disabled = false;
         if (submitText) submitText.innerText = 'Cập nhật mật khẩu';
+    }
+}
+
+// -------------------------------------------------------------
+// LOGIC DANH SACH CHAN (BLOCKED USERS) TRONG CAI DAT
+// -------------------------------------------------------------
+async function loadBlockedUsersList() {
+    const loadingEl = document.getElementById('blocked-users-loading');
+    const emptyEl = document.getElementById('blocked-users-empty');
+    const listEl = document.getElementById('blocked-users-list');
+
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (emptyEl) emptyEl.classList.add('hidden');
+    if (listEl) listEl.classList.add('hidden');
+
+    try {
+        const res = await fetch('/app/user/blocks');
+        const data = await res.json();
+
+        if (loadingEl) loadingEl.classList.add('hidden');
+
+        if (res.ok && data.success) {
+            if (!data.blocked_users || data.blocked_users.length === 0) {
+                if (emptyEl) emptyEl.classList.remove('hidden');
+                return;
+            }
+
+            let html = '';
+            data.blocked_users.forEach(u => {
+                html += `
+                    <div class="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-3 min-w-0 flex-1 mr-2">
+                            <div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200 font-bold text-sm flex items-center justify-center shrink-0 overflow-hidden">
+                                ${u.avatar ? `<img src="${u.avatar}" class="w-full h-full object-cover" alt="${u.name}">` : `<span>${u.name.charAt(0).toUpperCase()}</span>`}
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h4 class="font-bold text-xs text-slate-900 dark:text-white truncate">${u.name}</h4>
+                                <p class="text-[10px] text-slate-400 truncate">${u.email} • Chặn từ ${u.blocked_at}</p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="unblockUserFromSettings(${u.id}, '${u.name}')" class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold transition-all border border-rose-200 dark:border-rose-900/60 shrink-0">
+                            Bỏ chặn
+                        </button>
+                    </div>
+                `;
+            });
+
+            if (listEl) {
+                listEl.innerHTML = html;
+                listEl.classList.remove('hidden');
+            }
+        } else {
+            if (emptyEl) emptyEl.classList.remove('hidden');
+        }
+    } catch (e) {
+        if (loadingEl) loadingEl.classList.add('hidden');
+        if (emptyEl) emptyEl.classList.remove('hidden');
+    }
+}
+
+async function unblockUserFromSettings(userId, userName) {
+    if (!confirm(`Bạn có chắc muốn bỏ chặn "${userName}"?`)) return;
+
+    try {
+        const res = await fetch(`/app/user/${userId}/unblock`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}'
+            }
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify === 'function') {
+                Toastify({ text: `Đã bỏ chặn ${userName}.`, style: { background: '#10b981' }, duration: 3000 }).showToast();
+            }
+            await loadBlockedUsersList();
+        } else {
+            alert(data.message || 'Không thể bỏ chặn người dùng.');
+        }
+    } catch (e) {
+        alert('Lỗi kết nối khi bỏ chặn.');
     }
 }
 </script>

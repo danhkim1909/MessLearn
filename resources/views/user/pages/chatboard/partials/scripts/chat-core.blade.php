@@ -748,9 +748,11 @@ let selectedNewMemberIds = new Set();
 
 async function openGroupMembersModal() {
     openModal('modal-group-members');
+    switchGroupModalTab('members');
     const panel = document.getElementById('group-add-member-panel');
     if (panel) panel.classList.add('hidden');
     selectedNewMemberIds.clear();
+    await loadGroupInfoAndSettings();
     await loadGroupMembers();
 }
 
@@ -993,6 +995,241 @@ async function handleLeaveGroupClick() {
         }
     } catch (e) {
         alert('Lỗi kết nối khi rời nhóm.');
+    }
+}
+
+let currentGroupInfoData = null;
+
+function switchGroupModalTab(tab) {
+    const tabs = ['members', 'info', 'settings'];
+    tabs.forEach(t => {
+        const btn = document.getElementById(`btn-group-tab-${t}`);
+        const panel = document.getElementById(`group-tab-panel-${t}`);
+        if (btn && panel) {
+            if (t === tab) {
+                btn.className = 'flex-1 py-2 px-3 rounded-xl bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs transition-all flex items-center justify-center gap-1.5';
+                panel.classList.remove('hidden');
+            } else {
+                btn.className = 'flex-1 py-2 px-3 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-all flex items-center justify-center gap-1.5';
+                panel.classList.add('hidden');
+            }
+        }
+    });
+
+    if (tab === 'info' || tab === 'settings') {
+        loadGroupInfoAndSettings();
+    }
+}
+
+async function loadGroupInfoAndSettings() {
+    try {
+        const res = await fetch(`/app/conversation/{{ $activeConversation?->id ?? 0 }}/info`);
+        const data = await res.json();
+        if (res.ok && data.success) {
+            currentGroupInfoData = data.group;
+            renderGroupInfoAndSettings(data.group);
+        }
+    } catch (e) {
+        // Bo qua loi nhe
+    }
+}
+
+function renderGroupInfoAndSettings(group) {
+    const titleInput = document.getElementById('group-edit-title');
+    const descInput = document.getElementById('group-edit-description');
+    const dateEl = document.getElementById('group-info-created-date');
+    const avatarPreview = document.getElementById('group-info-avatar-preview');
+    const avatarInitial = document.getElementById('group-info-avatar-initial');
+    const avatarLabel = document.getElementById('group-info-avatar-label');
+    const avatarHint = document.getElementById('group-info-avatar-hint');
+    const saveInfoBtn = document.getElementById('group-info-admin-actions');
+    const saveSettingsBtn = document.getElementById('group-settings-admin-actions');
+    const memberNotice = document.getElementById('group-settings-member-notice');
+
+    const settingReadOnly = document.getElementById('setting-group-read-only');
+    const settingAllowCall = document.getElementById('setting-group-allow-call');
+    const settingAllowInvite = document.getElementById('setting-group-allow-invite');
+
+    if (titleInput) {
+        titleInput.value = group.title || '';
+        titleInput.disabled = !group.is_admin;
+    }
+    if (descInput) {
+        descInput.value = group.description || '';
+        descInput.disabled = !group.is_admin;
+    }
+    if (dateEl) {
+        dateEl.innerText = group.created_at || 'Mới tạo';
+    }
+
+    if (avatarPreview && avatarInitial) {
+        if (group.avatar) {
+            avatarPreview.src = group.avatar;
+            avatarPreview.classList.remove('hidden');
+            avatarInitial.classList.add('hidden');
+        } else {
+            avatarPreview.classList.add('hidden');
+            avatarInitial.classList.remove('hidden');
+            avatarInitial.innerText = group.title ? group.title.charAt(0).toUpperCase() : 'G';
+        }
+    }
+
+    if (avatarLabel) {
+        if (group.is_admin) {
+            avatarLabel.classList.remove('hidden');
+            if (avatarHint) avatarHint.classList.add('hidden');
+        } else {
+            avatarLabel.classList.add('hidden');
+            if (avatarHint) avatarHint.classList.remove('hidden');
+        }
+    }
+
+    if (saveInfoBtn) {
+        if (group.is_admin) saveInfoBtn.classList.remove('hidden');
+        else saveInfoBtn.classList.add('hidden');
+    }
+
+    if (saveSettingsBtn) {
+        if (group.is_admin) saveSettingsBtn.classList.remove('hidden');
+        else saveSettingsBtn.classList.add('hidden');
+    }
+
+    if (memberNotice) {
+        if (group.is_admin) memberNotice.classList.add('hidden');
+        else memberNotice.classList.remove('hidden');
+    }
+
+    if (settingReadOnly) {
+        settingReadOnly.checked = !!group.settings.read_only;
+        settingReadOnly.disabled = !group.is_admin;
+    }
+    if (settingAllowCall) {
+        settingAllowCall.checked = !!group.settings.allow_member_start_call;
+        settingAllowCall.disabled = !group.is_admin;
+    }
+    if (settingAllowInvite) {
+        settingAllowInvite.checked = !!group.settings.allow_member_invite;
+        settingAllowInvite.disabled = !group.is_admin;
+    }
+
+    const addMemberActionRow = document.getElementById('group-add-member-action-row');
+    if (addMemberActionRow) {
+        if (!group.settings.allow_member_invite && !group.is_admin) {
+            addMemberActionRow.classList.add('hidden');
+        } else {
+            addMemberActionRow.classList.remove('hidden');
+        }
+    }
+
+    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+}
+
+function previewGroupAvatar(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const preview = document.getElementById('group-info-avatar-preview');
+        const initial = document.getElementById('group-info-avatar-initial');
+        if (preview && initial) {
+            preview.src = e.target.result;
+            preview.classList.remove('hidden');
+            initial.classList.add('hidden');
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+async function submitUpdateGroupInfo() {
+    const titleInput = document.getElementById('group-edit-title');
+    const descInput = document.getElementById('group-edit-description');
+    const avatarInput = document.getElementById('group-edit-avatar-input');
+    const btn = document.getElementById('btn-save-group-info');
+
+    const title = titleInput ? titleInput.value.trim() : '';
+    if (!title) {
+        alert('Vui lòng nhập tên nhóm học tập.');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('title', title);
+    if (descInput) formData.append('description', descInput.value.trim());
+    if (avatarInput && avatarInput.files[0]) {
+        formData.append('avatar', avatarInput.files[0]);
+    }
+
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch(`/app/conversation/{{ $activeConversation?->id ?? 0 }}/info`, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: formData
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: 'Đã cập nhật thông tin nhóm thành công!', style: { background: '#10b981' } }).showToast();
+            }
+            const headerTitle = document.getElementById('chat-header-group-title');
+            if (headerTitle && data.group.title) {
+                headerTitle.innerText = data.group.title;
+            }
+            await loadGroupInfoAndSettings();
+        } else {
+            alert(data.message || 'Không thể cập nhật thông tin nhóm.');
+        }
+    } catch (e) {
+        alert('Lỗi kết nối khi cập nhật thông tin nhóm.');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function submitUpdateGroupSettings() {
+    const settingReadOnly = document.getElementById('setting-group-read-only');
+    const settingAllowCall = document.getElementById('setting-group-allow-call');
+    const settingAllowInvite = document.getElementById('setting-group-allow-invite');
+    const btn = document.getElementById('btn-save-group-settings');
+
+    const payload = {
+        read_only: settingReadOnly ? (settingReadOnly.checked ? 1 : 0) : 0,
+        allow_member_start_call: settingAllowCall ? (settingAllowCall.checked ? 1 : 0) : 1,
+        allow_member_invite: settingAllowInvite ? (settingAllowInvite.checked ? 1 : 0) : 1,
+    };
+
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch(`/app/conversation/{{ $activeConversation?->id ?? 0 }}/settings`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: 'Đã lưu cài đặt nhóm thành công!', style: { background: '#10b981' } }).showToast();
+            }
+            await loadGroupInfoAndSettings();
+        } else {
+            alert(data.message || 'Không thể lưu cài đặt nhóm.');
+        }
+    } catch (e) {
+        alert('Lỗi kết nối khi lưu cài đặt nhóm.');
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
 
@@ -3541,6 +3778,299 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // =========================================================
+    // CAI DAT CUOC TRO CHUYEN: GHIM, MUTE, BIET DANH
+    // =========================================================
+    let isCurrentConversationMuted = {{ ($currentParticipant && $currentParticipant->isMuted()) ? 'true' : 'false' }};
+
+    function playIncomingMessageSound() {
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) return;
+            const ctx = new AudioCtx();
+            if (ctx.state === 'suspended') {
+                ctx.resume();
+            }
+            const now = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, now);
+            osc.frequency.exponentialRampToValueAtTime(1318.51, now + 0.12);
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.25);
+        } catch (e) {
+            // Trinh duyet chan autoplay audio
+        }
+    }
+
+    async function handleTogglePinChat() {
+        const convId = {{ $activeConversation?->id ?? 0 }};
+        if (!convId) return;
+
+        const pinBtn = document.getElementById('btn-header-pin-chat');
+        const headerMain = document.getElementById('chat-header-main');
+
+        try {
+            const res = await fetch(`{{ url('app/conversation') }}/${convId}/pin`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                }
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                const isPinned = !!data.is_pinned;
+                if (headerMain) {
+                    headerMain.setAttribute('data-is-pinned', isPinned ? '1' : '0');
+                }
+
+                if (pinBtn) {
+                    pinBtn.title = isPinned ? 'Bỏ ghim cuộc trò chuyện' : 'Ghim cuộc trò chuyện lên đầu';
+                    if (isPinned) {
+                        pinBtn.className = 'p-2 text-amber-500 bg-amber-50 dark:bg-amber-950/30 rounded-xl transition-all';
+                        pinBtn.innerHTML = '<i data-lucide="pin" class="w-5 h-5 fill-amber-500"></i>';
+                    } else {
+                        pinBtn.className = 'p-2 text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all';
+                        pinBtn.innerHTML = '<i data-lucide="pin" class="w-5 h-5"></i>';
+                    }
+                }
+
+                updateSidebarPinIcon(convId, isPinned);
+
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    lucide.createIcons();
+                }
+
+                Toastify({
+                    text: data.message,
+                    duration: 3000,
+                    style: { background: isPinned ? "#f59e0b" : "#64748b" }
+                }).showToast();
+            } else {
+                Toastify({ text: data.message || "Lỗi cập nhật ghim", style: { background: "#f43f5e" } }).showToast();
+            }
+        } catch (err) {
+            console.error('Loi toggle pin chat:', err);
+            Toastify({ text: "Lỗi kết nối", style: { background: "#f43f5e" } }).showToast();
+        }
+    }
+
+    function updateSidebarPinIcon(convId, isPinned) {
+        const sidebarLink = document.querySelector(`a[href*="/app/chat-board/${convId}"]`);
+        if (!sidebarLink) return;
+        const iconContainer = sidebarLink.querySelector('.shrink-0.flex.items-center.gap-1') || sidebarLink.querySelector('.flex.items-center.gap-1.shrink-0');
+        if (!iconContainer) return;
+
+        let pinIcon = iconContainer.querySelector('i[data-lucide="pin"]');
+        if (isPinned) {
+            if (!pinIcon) {
+                iconContainer.insertAdjacentHTML('beforeend', '<i data-lucide="pin" class="w-3.5 h-3.5 text-amber-500 fill-amber-500" title="Đã ghim"></i>');
+            }
+        } else {
+            if (pinIcon) {
+                pinIcon.remove();
+            }
+        }
+    }
+
+    function toggleMuteDropdown(e) {
+        if (e) e.stopPropagation();
+        const dropdown = document.getElementById('header-mute-dropdown');
+        if (dropdown) {
+            dropdown.classList.toggle('hidden');
+        }
+    }
+
+    async function handleSelectMuteDuration(duration) {
+        const dropdown = document.getElementById('header-mute-dropdown');
+        if (dropdown) dropdown.classList.add('hidden');
+
+        const convId = {{ $activeConversation?->id ?? 0 }};
+        if (!convId) return;
+
+        try {
+            const res = await fetch(`{{ url('app/conversation') }}/${convId}/mute`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ duration: duration })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                isCurrentConversationMuted = !!data.is_muted;
+                const muteBtn = document.getElementById('btn-header-mute-chat');
+                const headerMain = document.getElementById('chat-header-main');
+                const unmuteOptionWrap = document.getElementById('mute-unmute-option-wrap');
+
+                if (headerMain) {
+                    headerMain.setAttribute('data-is-muted', isCurrentConversationMuted ? '1' : '0');
+                }
+
+                if (unmuteOptionWrap) {
+                    if (isCurrentConversationMuted) {
+                        unmuteOptionWrap.classList.remove('hidden');
+                    } else {
+                        unmuteOptionWrap.classList.add('hidden');
+                    }
+                }
+
+                if (muteBtn) {
+                    if (isCurrentConversationMuted) {
+                        muteBtn.className = 'p-2 text-rose-500 bg-rose-50 dark:bg-rose-950/30 rounded-xl transition-all';
+                        muteBtn.title = 'Đang tắt thông báo (Nhấn để tùy chỉnh)';
+                        muteBtn.innerHTML = '<i data-lucide="bell-off" class="w-5 h-5"></i>';
+                    } else {
+                        muteBtn.className = 'p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all';
+                        muteBtn.title = 'Tắt thông báo cuộc trò chuyện';
+                        muteBtn.innerHTML = '<i data-lucide="bell" class="w-5 h-5"></i>';
+                    }
+                }
+
+                updateSidebarMuteIcon(convId, isCurrentConversationMuted);
+
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    lucide.createIcons();
+                }
+
+                Toastify({
+                    text: data.message,
+                    duration: 3500,
+                    style: { background: isCurrentConversationMuted ? "#f43f5e" : "#10b981" }
+                }).showToast();
+            } else {
+                Toastify({ text: data.message || "Lỗi cập nhật thông báo", style: { background: "#f43f5e" } }).showToast();
+            }
+        } catch (err) {
+            console.error('Loi mute conversation:', err);
+            Toastify({ text: "Lỗi kết nối", style: { background: "#f43f5e" } }).showToast();
+        }
+    }
+
+    function updateSidebarMuteIcon(convId, isMuted) {
+        const sidebarLink = document.querySelector(`a[href*="/app/chat-board/${convId}"]`);
+        if (!sidebarLink) return;
+        const iconContainer = sidebarLink.querySelector('.shrink-0.flex.items-center.gap-1') || sidebarLink.querySelector('.flex.items-center.gap-1.shrink-0');
+        if (!iconContainer) return;
+
+        let muteIcon = iconContainer.querySelector('i[data-lucide="bell-off"]');
+        if (isMuted) {
+            if (!muteIcon) {
+                iconContainer.insertAdjacentHTML('afterbegin', '<i data-lucide="bell-off" class="w-3.5 h-3.5 text-slate-400" title="Đang tắt thông báo"></i>');
+            }
+        } else {
+            if (muteIcon) {
+                muteIcon.remove();
+            }
+        }
+    }
+
+    function openChangeNicknameModal() {
+        const headerMain = document.getElementById('chat-header-main');
+        const currentNickname = headerMain ? (headerMain.getAttribute('data-nickname') || '') : '';
+        const input = document.getElementById('input-custom-nickname');
+        const btnRemove = document.getElementById('btn-remove-nickname');
+
+        if (input) {
+            input.value = currentNickname;
+        }
+
+        if (btnRemove) {
+            if (currentNickname.trim().length > 0) {
+                btnRemove.classList.remove('hidden');
+            } else {
+                btnRemove.classList.add('hidden');
+            }
+        }
+
+        openModal('modal-change-nickname');
+        if (input) {
+            setTimeout(() => input.focus(), 100);
+        }
+    }
+
+    async function handleSaveNickname(isRemove = false) {
+        const convId = {{ $activeConversation?->id ?? 0 }};
+        if (!convId) return;
+
+        const input = document.getElementById('input-custom-nickname');
+        const newNickname = isRemove ? '' : (input ? input.value.trim() : '');
+
+        try {
+            const res = await fetch(`{{ url('app/conversation') }}/${convId}/nickname`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ nickname: newNickname })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                closeModal('modal-change-nickname');
+
+                const savedNickname = data.nickname || '';
+                const headerMain = document.getElementById('chat-header-main');
+                const originalName = headerMain ? (headerMain.getAttribute('data-original-name') || '') : '';
+
+                if (headerMain) {
+                    headerMain.setAttribute('data-nickname', savedNickname);
+                }
+
+                const nameTextEl = document.getElementById('chat-header-name-text');
+                const originalBadgeEl = document.getElementById('chat-header-original-badge');
+
+                if (nameTextEl) {
+                    nameTextEl.innerText = savedNickname ? savedNickname : originalName;
+                }
+
+                if (originalBadgeEl) {
+                    if (savedNickname && savedNickname !== originalName) {
+                        originalBadgeEl.innerText = `(${originalName})`;
+                        originalBadgeEl.classList.remove('hidden');
+                    } else {
+                        originalBadgeEl.classList.add('hidden');
+                    }
+                }
+
+                updateSidebarChatName(convId, savedNickname ? savedNickname : originalName);
+
+                Toastify({
+                    text: data.message,
+                    duration: 3000,
+                    style: { background: "#6366f1" }
+                }).showToast();
+            } else {
+                Toastify({ text: data.message || "Lỗi lưu biệt danh", style: { background: "#f43f5e" } }).showToast();
+            }
+        } catch (err) {
+            console.error('Loi save nickname:', err);
+            Toastify({ text: "Lỗi kết nối", style: { background: "#f43f5e" } }).showToast();
+        }
+    }
+
+    function updateSidebarChatName(convId, displayName) {
+        const sidebarLink = document.querySelector(`a[href*="/app/chat-board/${convId}"]`);
+        if (!sidebarLink) return;
+        const nameHeader = sidebarLink.querySelector('h3');
+        if (nameHeader) {
+            nameHeader.innerText = displayName;
+        }
+    }
+
     // Event Listeners (Echo Realtime & Click Outside)
     document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('chat-messages-container');
@@ -3568,6 +4098,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (e.message.type === 'event') {
                         setUpcomingReminderBanner(e.message);
                     }
+                    if (e.message.user_id !== {{ Auth::id() }} && !isCurrentConversationMuted) {
+                        playIncomingMessageSound();
+                        if (document.hidden) {
+                            triggerBrowserNotification(
+                                e.message.user ? e.message.user.name : 'Tin nhắn mới',
+                                e.message.body || 'Bạn có một tin nhắn mới'
+                            );
+                        }
+                    }
                 })
                 .listen('.MessageUpdated', (e) => {
                     updateMessageInChat(e.message);
@@ -3594,6 +4133,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const searchPanel = document.getElementById('chat-search-panel');
                 if (searchPanel && !searchPanel.classList.contains('hidden')) {
                     closeChatSearch();
+                }
+            }
+            if (!e.target.closest('#header-mute-container')) {
+                const muteDropdown = document.getElementById('header-mute-dropdown');
+                if (muteDropdown && !muteDropdown.classList.contains('hidden')) {
+                    muteDropdown.classList.add('hidden');
                 }
             }
         });
