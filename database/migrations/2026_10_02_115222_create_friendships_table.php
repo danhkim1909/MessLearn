@@ -27,10 +27,10 @@ return new class extends Migration
                 ->cascadeOnDelete()
                 ->comment('ID người nhận lời mời kết bạn');
                 
-            // Trạng thái kết bạn: pending (chờ đồng ý), accepted (đã là bạn bè), blocked (chặn)
-            $table->enum('status', ['pending', 'accepted', 'blocked'])
+            // Trạng thái kết bạn: pending (chờ đồng ý), accepted (đã là bạn bè)
+            $table->enum('status', ['pending', 'accepted'])
                 ->default('pending')
-                ->comment('Trạng thái kết bạn: pending, accepted, blocked');
+                ->comment('Trạng thái kết bạn: pending, accepted');
                 
             $table->timestamps();
 

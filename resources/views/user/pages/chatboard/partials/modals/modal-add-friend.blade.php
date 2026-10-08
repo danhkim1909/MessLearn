@@ -63,14 +63,15 @@
 
                 <!-- The xem truoc nguoi dung (User Preview Card) -->
                 <div id="add-friend-user-card" class="hidden border border-slate-200 dark:border-slate-700 rounded-2xl p-4 bg-slate-50 dark:bg-slate-900/60 space-y-3">
-                    <div class="flex items-center gap-3">
-                        <div id="add-friend-card-avatar" class="w-12 h-12 rounded-2xl bg-sky-100 dark:bg-sky-900/50 text-sky-600 dark:text-sky-400 flex items-center justify-center font-extrabold text-base shrink-0 shadow-inner">
+                    <div id="add-friend-user-info-row" onclick="handlePreviewCardClick()" class="flex items-center gap-3 cursor-pointer group hover:bg-slate-100 dark:hover:bg-slate-800/60 p-1.5 -m-1.5 rounded-xl transition-all" title="Bấm để xem hồ sơ chi tiết">
+                        <div id="add-friend-card-avatar" class="w-12 h-12 rounded-2xl bg-sky-100 dark:bg-sky-900/50 text-sky-600 dark:text-sky-400 flex items-center justify-center font-extrabold text-base shrink-0 shadow-inner group-hover:scale-105 transition-transform">
                             U
                         </div>
                         <div class="flex-1 min-w-0">
-                            <h4 id="add-friend-card-name" class="font-bold text-sm text-slate-900 dark:text-white truncate">Ten nguoi dung</h4>
+                            <h4 id="add-friend-card-name" class="font-bold text-sm text-slate-900 dark:text-white group-hover:text-sky-500 transition-colors truncate">Ten nguoi dung</h4>
                             <p id="add-friend-card-email" class="text-xs text-slate-500 dark:text-slate-400 truncate">email@example.com</p>
                         </div>
+                        <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400 group-hover:text-sky-500 transition-colors shrink-0 mr-1"></i>
                     </div>
 
                     <!-- Badge trang thai quan he -->

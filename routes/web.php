@@ -31,12 +31,19 @@ Route::prefix('app')->middleware(CheckLoginMiddleware::class)->name('app.')->gro
         Route::post('/unfriend/{friendId}', [FriendshipController::class, 'unfriend'])->name('unfriend');
     });
 
+    Route::prefix('user')->name('user.')->group(function () {
+        Route::get('/{user}/profile', [FriendshipController::class, 'getPartnerProfile'])->name('profile');
+        Route::post('/{user}/block', [FriendshipController::class, 'blockUser'])->name('block');
+        Route::post('/{user}/unblock', [FriendshipController::class, 'unblockUser'])->name('unblock');
+    });
+
     Route::prefix('profile')->name('profile.')->group(function () {
         Route::post('/update', [ProfileController::class, 'updateProfile'])->name('update');
         Route::post('/password', [ProfileController::class, 'updatePassword'])->name('password');
     });
 
     Route::prefix('conversation')->name('conversation.')->group(function () {
+        Route::post('/direct', [ConversationController::class, 'getOrCreateDirectConversation'])->name('direct');
         Route::post('/group', [ConversationController::class, 'storeGroup'])->name('store-group');
         Route::get('/{conversation}/members', [ConversationController::class, 'getMembers'])->name('members');
         Route::get('/{conversation}/members/available-friends', [ConversationController::class, 'getAvailableFriends'])->name('members.available-friends');

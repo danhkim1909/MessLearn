@@ -8,6 +8,7 @@ use App\Models\Conversation;
 use App\Models\Meeting;
 use App\Models\MeetingParticipant;
 use App\Models\Message;
+use App\Models\UserBlock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,22 @@ class MeetingController extends Controller
 
         if (!$conversation->participants()->where('user_id', $userId)->exists()) {
             return response()->json(['message' => 'Ban khong co quyen tham gia cuoc tro chuyen nay.'], 403);
+        }
+
+        if (!$conversation->is_group) {
+            $otherParticipant = $conversation->participants()->where('user_id', '!=', $userId)->first();
+            if ($otherParticipant) {
+                $otherUserId = $otherParticipant->user_id;
+                $isBlocked = UserBlock::where(function($q) use ($userId, $otherUserId) {
+                    $q->where('blocker_id', $userId)->where('blocked_id', $otherUserId);
+                })->orWhere(function($q) use ($userId, $otherUserId) {
+                    $q->where('blocker_id', $otherUserId)->where('blocked_id', $userId);
+                })->exists();
+
+                if ($isBlocked) {
+                    return response()->json(['message' => 'Không thể thực hiện cuộc gọi do có chặn liên hệ.'], 403);
+                }
+            }
         }
 
         $type = $request->input('type', 'video');

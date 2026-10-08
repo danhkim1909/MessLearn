@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\MessageReaction;
+use App\Models\UserBlock;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -24,6 +25,22 @@ class MessageController extends Controller
             if (!$conversation->participants()->where('user_id', $userId)->exists()) {
                 Log::warning("Người dùng {$userId} cố gắng gửi tin nhắn vào cuộc trò chuyện {$conversation->id} mà không có quyền.");
                 return response()->json(['error' => 'Forbidden'], 403);
+            }
+
+            if (!$conversation->is_group) {
+                $otherParticipant = $conversation->participants()->where('user_id', '!=', $userId)->first();
+                if ($otherParticipant) {
+                    $otherUserId = $otherParticipant->user_id;
+                    $isBlocked = UserBlock::where(function($q) use ($userId, $otherUserId) {
+                        $q->where('blocker_id', $userId)->where('blocked_id', $otherUserId);
+                    })->orWhere(function($q) use ($userId, $otherUserId) {
+                        $q->where('blocker_id', $otherUserId)->where('blocked_id', $userId);
+                    })->exists();
+
+                    if ($isBlocked) {
+                        return response()->json(['message' => 'Không thể gửi tin nhắn do có chặn liên hệ giữa hai bên.'], 403);
+                    }
+                }
             }
 
             $hasAudio = $request->hasFile('audio');

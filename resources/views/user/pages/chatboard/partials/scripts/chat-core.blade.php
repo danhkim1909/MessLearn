@@ -156,15 +156,12 @@ function renderFriendResultCard(data) {
                 <span>Da la ban be</span>
             </div>
         `;
-        const directConvId = rel.conversation_id;
         actionHtml = `
             <div class="flex gap-2">
-                ${directConvId ? `
-                    <a href="/app/c/${directConvId}" class="flex-1 py-2.5 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2">
-                        <i data-lucide="message-circle" class="w-4 h-4"></i>
-                        <span>Nhan tin ngay</span>
-                    </a>
-                ` : ''}
+                <button type="button" onclick="handlePartnerSendMessageClickWithId(${user.id})" class="flex-1 py-2.5 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="message-circle" class="w-4 h-4"></i>
+                    <span>Nhan tin</span>
+                </button>
                 <button type="button" onclick="unfriendUser(${user.id})" class="px-3 py-2.5 bg-slate-100 hover:bg-rose-500 hover:text-white dark:bg-slate-700 text-slate-500 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5" title="Huy ket ban">
                     <i data-lucide="user-minus" class="w-4 h-4"></i>
                     <span>Huy ket ban</span>
@@ -179,10 +176,16 @@ function renderFriendResultCard(data) {
             </div>
         `;
         actionHtml = `
-            <button type="button" onclick="cancelFriendRequest(${rel.friendship_id})" id="btn-cancel-friend-modal" class="w-full py-2.5 px-4 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2">
-                <i data-lucide="x-circle" class="w-4 h-4"></i>
-                <span>Huy loi moi ket ban</span>
-            </button>
+            <div class="flex gap-2">
+                <button type="button" onclick="handlePartnerSendMessageClickWithId(${user.id})" class="flex-1 py-2.5 px-4 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="message-circle" class="w-4 h-4"></i>
+                    <span>Nhan tin</span>
+                </button>
+                <button type="button" onclick="cancelFriendRequest(${rel.friendship_id})" id="btn-cancel-friend-modal" class="px-3 py-2.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5">
+                    <i data-lucide="x-circle" class="w-4 h-4"></i>
+                    <span>Huy loi moi</span>
+                </button>
+            </div>
         `;
     } else if (rel.status === 'pending_received') {
         badgeHtml = `
@@ -192,14 +195,20 @@ function renderFriendResultCard(data) {
             </div>
         `;
         actionHtml = `
-            <div class="flex gap-2">
-                <button type="button" onclick="acceptFriendFromModal(${rel.friendship_id})" id="btn-accept-friend-modal" class="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2">
-                    <i data-lucide="check" class="w-4 h-4"></i>
-                    <span>Chap nhan</span>
-                </button>
-                <button type="button" onclick="rejectFriendFromModal(${rel.friendship_id})" class="px-4 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5">
-                    <i data-lucide="x" class="w-4 h-4"></i>
-                    <span>Tu choi</span>
+            <div class="space-y-2">
+                <div class="flex gap-2">
+                    <button type="button" onclick="acceptFriendFromModal(${rel.friendship_id})" id="btn-accept-friend-modal" class="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="check" class="w-4 h-4"></i>
+                        <span>Chap nhan</span>
+                    </button>
+                    <button type="button" onclick="rejectFriendFromModal(${rel.friendship_id})" class="px-4 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                        <span>Tu choi</span>
+                    </button>
+                </div>
+                <button type="button" onclick="handlePartnerSendMessageClickWithId(${user.id})" class="w-full py-2 px-3 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5">
+                    <i data-lucide="message-circle" class="w-4 h-4"></i>
+                    <span>Nhan tin truc tiep</span>
                 </button>
             </div>
         `;
@@ -207,7 +216,7 @@ function renderFriendResultCard(data) {
         badgeHtml = `
             <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/60 text-xs font-semibold">
                 <i data-lucide="ban" class="w-4 h-4"></i>
-                <span>Khong the ket ban voi nguoi dung nay</span>
+                <span>Khong the lien he voi nguoi dung nay</span>
             </div>
         `;
         actionHtml = '';
@@ -219,10 +228,16 @@ function renderFriendResultCard(data) {
             </div>
         `;
         actionHtml = `
-            <button type="button" onclick="submitFriendRequest(${user.id})" id="btn-send-friend-modal" class="w-full py-2.5 px-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold text-xs shadow-md shadow-sky-500/20 transition-all flex items-center justify-center gap-2">
-                <i data-lucide="user-plus" class="w-4 h-4"></i>
-                <span id="btn-send-friend-text">Gui loi moi ket ban</span>
-            </button>
+            <div class="flex gap-2">
+                <button type="button" onclick="handlePartnerSendMessageClickWithId(${user.id})" class="flex-1 py-2.5 px-4 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="message-circle" class="w-4 h-4"></i>
+                    <span>Nhan tin</span>
+                </button>
+                <button type="button" onclick="submitFriendRequest(${user.id})" id="btn-send-friend-modal" class="flex-1 py-2.5 px-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold text-xs shadow-md shadow-sky-500/20 transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="user-plus" class="w-4 h-4"></i>
+                    <span id="btn-send-friend-text">Ket ban</span>
+                </button>
+            </div>
         `;
     }
 
@@ -234,6 +249,13 @@ function renderFriendResultCard(data) {
     if (typeof lucide !== 'undefined' && lucide.createIcons) {
         lucide.createIcons();
     }
+}
+
+function handlePreviewCardClick() {
+    if (!currentSearchedUser || !currentSearchedUser.user) return;
+    const targetUserId = currentSearchedUser.user.id;
+    closeModal('modal-add-friend');
+    openPartnerProfileModal(targetUserId);
 }
 
 async function submitFriendRequest(friendId) {
@@ -311,13 +333,13 @@ async function acceptFriendFromModal(friendshipId) {
             if (typeof Toastify !== 'undefined') {
                 Toastify({ text: 'Da chap nhan ket ban thanh cong!', style: { background: '#10b981' } }).showToast();
             }
-            setTimeout(() => {
-                if (data.redirect_url) {
-                    window.location.href = data.redirect_url;
-                } else {
-                    window.location.reload();
-                }
-            }, 600);
+            if (currentSearchedUser && currentSearchedUser.relationship) {
+                currentSearchedUser.relationship.status = 'friend';
+                renderFriendResultCard(currentSearchedUser);
+            }
+            const item = document.getElementById(`pending-request-item-${friendshipId}`);
+            if (item) item.remove();
+            updateSidebarPendingCount(-1);
         } else {
             alert(data.message || 'Khong the chap nhan loi moi.');
             if (btn) btn.disabled = false;
@@ -974,7 +996,386 @@ async function handleLeaveGroupClick() {
     }
 }
 
-// Lang nghe su kien ban be thoi gian thuc tren kenh ca nhan (Chay toan cuc bat ke co cuoc tro chuyen hay khong)
+// ---------------------------------------------------------
+// LOGIC HO SO DOI PHUONG & CHAN LIEN HE (PARTNER PROFILE & BLOCK)
+// ---------------------------------------------------------
+let currentPartnerProfileData = null;
+
+async function openPartnerProfileModal(userId) {
+    if (!userId) return;
+    openModal('modal-partner-profile');
+
+    const loadingEl = document.getElementById('partner-profile-loading');
+    const contentEl = document.getElementById('partner-profile-content');
+
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (contentEl) contentEl.classList.add('hidden');
+
+    try {
+        const res = await fetch(`/app/user/${userId}/profile`);
+        const data = await res.json();
+        currentPartnerProfileData = data;
+
+        if (loadingEl) loadingEl.classList.add('hidden');
+
+        if (res.ok && data.success) {
+            renderPartnerProfileData(data);
+            if (contentEl) contentEl.classList.remove('hidden');
+        } else {
+            alert(data.message || 'Không thể tải thông tin người dùng.');
+            closeModal('modal-partner-profile');
+        }
+    } catch (err) {
+        if (loadingEl) loadingEl.classList.add('hidden');
+        alert('Lỗi kết nối khi tải hồ sơ đối phương.');
+        closeModal('modal-partner-profile');
+    }
+}
+
+function renderPartnerProfileData(data) {
+    const user = data.user;
+    const nameEl = document.getElementById('partner-profile-name');
+    const emailEl = document.getElementById('partner-profile-email');
+    const joinedEl = document.getElementById('partner-profile-joined-date');
+    const avatarImg = document.getElementById('partner-profile-avatar');
+    const initialEl = document.getElementById('partner-profile-initial');
+    const friendBadge = document.getElementById('partner-badge-friendship');
+    const blockBadge = document.getElementById('partner-badge-blocked');
+
+    if (nameEl) nameEl.innerText = user.name;
+    if (emailEl) emailEl.innerText = user.email;
+    if (joinedEl) joinedEl.innerText = user.created_at || 'Chưa xác định';
+
+    if (avatarImg && initialEl) {
+        if (user.avatar) {
+            avatarImg.src = user.avatar;
+            avatarImg.classList.remove('hidden');
+            initialEl.classList.add('hidden');
+        } else {
+            avatarImg.classList.add('hidden');
+            initialEl.classList.remove('hidden');
+            initialEl.innerText = user.name ? user.name.charAt(0).toUpperCase() : 'U';
+        }
+    }
+
+    const friendshipContainer = document.getElementById('partner-friendship-action-container');
+    const btnSendMessage = document.getElementById('btn-partner-send-message');
+    const btnUnfriend = document.getElementById('btn-partner-unfriend');
+    const btnAddFriend = document.getElementById('btn-partner-add-friend');
+    const btnBlock = document.getElementById('btn-partner-block');
+    const btnUnblock = document.getElementById('btn-partner-unblock');
+    const blockNote = document.getElementById('partner-block-note');
+
+    const isBlocked = data.is_blocked_by_me || data.is_blocked_by_them;
+
+    if (btnSendMessage) {
+        if (data.is_self || isBlocked) {
+            btnSendMessage.classList.add('hidden');
+        } else {
+            btnSendMessage.classList.remove('hidden');
+            btnSendMessage.disabled = false;
+        }
+    }
+
+    if (friendBadge) {
+        if (data.friend_status === 'friend') {
+            friendBadge.innerText = 'Bạn bè';
+            friendBadge.className = 'px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400';
+        } else if (data.friend_status === 'pending_sent') {
+            friendBadge.innerText = 'Đã gửi lời mời';
+            friendBadge.className = 'px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400';
+        } else if (data.friend_status === 'pending_received') {
+            friendBadge.innerText = 'Chờ bạn phản hồi';
+            friendBadge.className = 'px-2.5 py-1 rounded-full text-[11px] font-bold bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400';
+        } else {
+            friendBadge.innerText = 'Chưa kết bạn';
+            friendBadge.className = 'px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300';
+        }
+    }
+
+    if (blockBadge) {
+        if (data.is_blocked_by_me) {
+            blockBadge.innerText = 'Bạn đang chặn';
+            blockBadge.classList.remove('hidden');
+        } else if (data.is_blocked_by_them) {
+            blockBadge.innerText = 'Đối phương đã chặn bạn';
+            blockBadge.classList.remove('hidden');
+        } else {
+            blockBadge.classList.add('hidden');
+        }
+    }
+
+    if (friendshipContainer) {
+        if (isBlocked || data.is_self) {
+            friendshipContainer.classList.add('hidden');
+        } else {
+            friendshipContainer.classList.remove('hidden');
+            if (data.friend_status === 'friend') {
+                if (btnUnfriend) btnUnfriend.classList.remove('hidden');
+                if (btnAddFriend) btnAddFriend.classList.add('hidden');
+            } else if (data.friend_status === 'pending_sent') {
+                if (btnUnfriend) btnUnfriend.classList.add('hidden');
+                if (btnAddFriend) {
+                    btnAddFriend.classList.remove('hidden');
+                    btnAddFriend.disabled = true;
+                    btnAddFriend.innerHTML = '<i data-lucide="clock" class="w-4 h-4"></i><span>Đã gửi lời mời kết bạn</span>';
+                }
+            } else if (data.friend_status === 'pending_received') {
+                if (btnUnfriend) btnUnfriend.classList.add('hidden');
+                if (btnAddFriend) {
+                    btnAddFriend.classList.remove('hidden');
+                    btnAddFriend.disabled = false;
+                    btnAddFriend.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i><span>Chấp nhận lời mời kết bạn</span>';
+                }
+            } else {
+                if (btnUnfriend) btnUnfriend.classList.add('hidden');
+                if (btnAddFriend) {
+                    btnAddFriend.classList.remove('hidden');
+                    btnAddFriend.disabled = false;
+                    btnAddFriend.innerHTML = '<i data-lucide="user-plus" class="w-4 h-4"></i><span>Gửi lời mời kết bạn</span>';
+                }
+            }
+        }
+    }
+
+    if (btnBlock && btnUnblock) {
+        if (data.is_self) {
+            btnBlock.classList.add('hidden');
+            btnUnblock.classList.add('hidden');
+            if (blockNote) blockNote.classList.add('hidden');
+        } else if (data.is_blocked_by_me) {
+            btnBlock.classList.add('hidden');
+            btnUnblock.classList.remove('hidden');
+            if (blockNote) {
+                blockNote.classList.remove('hidden');
+                blockNote.innerText = 'Bạn đã chặn người dùng này. Bỏ chặn để tiếp tục liên lạc.';
+            }
+        } else {
+            btnBlock.classList.remove('hidden');
+            btnUnblock.classList.add('hidden');
+            if (blockNote) {
+                blockNote.classList.remove('hidden');
+                blockNote.innerText = 'Khi chặn, đối phương sẽ không thể nhắn tin hay gọi điện cho bạn.';
+            }
+        }
+    }
+
+    updateChatBlockedUI(data.is_blocked_by_me, data.is_blocked_by_them, data.user.id);
+
+    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+}
+
+async function handlePartnerBlockClick() {
+    if (!currentPartnerProfileData) return;
+    const user = currentPartnerProfileData.user;
+    if (!confirm(`Bạn có chắc chắn muốn chặn "${user.name}"? Đối phương sẽ không thể nhắn tin hoặc gọi điện cho bạn.`)) return;
+
+    try {
+        const res = await fetch(`/app/user/${user.id}/block`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: 'Đã chặn người dùng thành công.', style: { background: '#ef4444' }, duration: 3000 }).showToast();
+            }
+            await openPartnerProfileModal(user.id);
+        } else {
+            alert(data.message || 'Không thể chặn người dùng.');
+        }
+    } catch (e) {
+        alert('Lỗi kết nối khi thực hiện chặn.');
+    }
+}
+
+async function handlePartnerUnblockClick() {
+    if (!currentPartnerProfileData) return;
+    const user = currentPartnerProfileData.user;
+    if (!confirm(`Bạn có chắc muốn bỏ chặn "${user.name}"?`)) return;
+
+    try {
+        const res = await fetch(`/app/user/${user.id}/unblock`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: 'Đã bỏ chặn người dùng.', style: { background: '#10b981' }, duration: 3000 }).showToast();
+            }
+            await openPartnerProfileModal(user.id);
+        } else {
+            alert(data.message || 'Không thể bỏ chặn người dùng.');
+        }
+    } catch (e) {
+        alert('Lỗi kết nối khi bỏ chặn.');
+    }
+}
+
+async function handlePartnerUnfriendClick() {
+    if (!currentPartnerProfileData) return;
+    const user = currentPartnerProfileData.user;
+    if (!confirm(`Bạn có chắc chắn muốn hủy kết bạn với "${user.name}"?`)) return;
+
+    try {
+        const res = await fetch(`/app/friend/unfriend/${user.id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: 'Đã hủy kết bạn thành công.', style: { background: '#64748b' }, duration: 3000 }).showToast();
+            }
+            await openPartnerProfileModal(user.id);
+        } else {
+            alert(data.message || 'Không thể hủy kết bạn.');
+        }
+    } catch (e) {
+        alert('Lỗi kết nối khi hủy kết bạn.');
+    }
+}
+
+async function handlePartnerAddFriendClick() {
+    if (!currentPartnerProfileData) return;
+    const user = currentPartnerProfileData.user;
+
+    if (currentPartnerProfileData.friend_status === 'pending_received' && currentPartnerProfileData.friendship_id) {
+        await acceptFriendFromSidebar(currentPartnerProfileData.friendship_id);
+        await openPartnerProfileModal(user.id);
+        return;
+    }
+
+    try {
+        const res = await fetch('/app/friend/send', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ friend_id: user.id })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: 'Đã gửi lời mời kết bạn!', style: { background: '#0284c7' }, duration: 3000 }).showToast();
+            }
+            await openPartnerProfileModal(user.id);
+        } else {
+            alert(data.message || 'Không thể gửi lời mời kết bạn.');
+        }
+    } catch (e) {
+        alert('Lỗi kết nối khi gửi lời mời kết bạn.');
+    }
+}
+
+function handlePartnerSendMessageClick() {
+    if (!currentPartnerProfileData || !currentPartnerProfileData.user) return;
+    handlePartnerSendMessageClickWithId(currentPartnerProfileData.user.id);
+}
+
+async function handlePartnerSendMessageClickWithId(userId) {
+    if (!userId) return;
+    const btn = document.getElementById('btn-partner-send-message');
+    if (btn) {
+        btn.disabled = true;
+    }
+
+    try {
+        const res = await fetch('{{ route('app.conversation.direct') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ target_user_id: userId })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success && data.redirect_url) {
+            window.location.href = data.redirect_url;
+        } else {
+            alert(data.message || 'Không thể tạo hoặc mở cuộc trò chuyện.');
+            if (btn) btn.disabled = false;
+        }
+    } catch (err) {
+        alert('Lỗi kết nối khi mở cuộc trò chuyện.');
+        if (btn) btn.disabled = false;
+    }
+}
+
+function updateChatBlockedUI(isBlockedByMe, isBlockedByThem, partnerUserId) {
+    const chatForm = document.getElementById('chat-form');
+    const blockedNotice = document.getElementById('chat-blocked-notice');
+    const blockedMsg = document.getElementById('chat-blocked-message');
+    const btnUnblock = document.getElementById('btn-unblock-from-chat');
+    const btnVoice = document.getElementById('btn-header-call-voice');
+    const btnVideo = document.getElementById('btn-header-call-video');
+
+    if (!chatForm || !blockedNotice) return;
+
+    if (isBlockedByMe || isBlockedByThem) {
+        chatForm.classList.add('hidden');
+        blockedNotice.classList.remove('hidden');
+
+        if (isBlockedByMe) {
+            if (blockedMsg) blockedMsg.innerText = 'Bạn đã chặn người dùng này.';
+            if (btnUnblock) {
+                btnUnblock.classList.remove('hidden');
+                btnUnblock.setAttribute('data-user-id', partnerUserId);
+            }
+        } else {
+            if (blockedMsg) blockedMsg.innerText = 'Bạn không thể gửi tin nhắn cho người dùng này.';
+            if (btnUnblock) btnUnblock.classList.add('hidden');
+        }
+
+        if (btnVoice) {
+            btnVoice.disabled = true;
+            btnVoice.classList.add('opacity-40', 'cursor-not-allowed');
+        }
+        if (btnVideo) {
+            btnVideo.disabled = true;
+            btnVideo.classList.add('opacity-40', 'cursor-not-allowed');
+        }
+    } else {
+        chatForm.classList.remove('hidden');
+        blockedNotice.classList.add('hidden');
+
+        if (btnVoice) {
+            btnVoice.disabled = false;
+            btnVoice.classList.remove('opacity-40', 'cursor-not-allowed');
+        }
+        if (btnVideo) {
+            btnVideo.disabled = false;
+            btnVideo.classList.remove('opacity-40', 'cursor-not-allowed');
+        }
+    }
+}
+
+function handleUnblockFromChatNotice() {
+    const btn = document.getElementById('btn-unblock-from-chat');
+    const userId = btn ? btn.getAttribute('data-user-id') : null;
+    if (userId) {
+        openPartnerProfileModal(userId);
+    }
+}
+
+// Lang nghe su kien ban be & chan lien he thoi gian thuc tren kenh ca nhan
 document.addEventListener('DOMContentLoaded', () => {
     if (typeof window.Echo !== 'undefined') {
         window.Echo.private('App.Models.User.{{ Auth::id() }}')
@@ -1027,12 +1428,33 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (typeof Toastify !== 'undefined') {
                         Toastify({ text: `${e.sender.name} đã hủy kết bạn.`, style: { background: '#64748b' } }).showToast();
                     }
+                } else if (e.action === 'user_blocked') {
+                    if (typeof Toastify !== 'undefined') {
+                        Toastify({ text: `${e.sender.name} đã chặn bạn.`, style: { background: '#e11d48' }, duration: 4000 }).showToast();
+                    }
+                    updateChatBlockedUI(false, true, e.sender.id);
+                } else if (e.action === 'user_unblocked') {
+                    if (typeof Toastify !== 'undefined') {
+                        Toastify({ text: `${e.sender.name} đã bỏ chặn bạn.`, style: { background: '#10b981' }, duration: 4000 }).showToast();
+                    }
+                    updateChatBlockedUI(false, false, e.sender.id);
                 }
             });
     }
 });
 
 @if(isset($activeConversation))
+    @if(!$activeConversation->is_group)
+        @php
+            $activeChatPartner = $activeConversation->participants->where('user_id', '!=', Auth::id())->first()->user ?? null;
+            $partnerBlockedByMe = $activeChatPartner ? Auth::user()->isBlocking($activeChatPartner->id) : false;
+            $partnerBlockedByThem = $activeChatPartner ? Auth::user()->isBlockedBy($activeChatPartner->id) : false;
+        @endphp
+        document.addEventListener('DOMContentLoaded', () => {
+            updateChatBlockedUI({{ $partnerBlockedByMe ? 'true' : 'false' }}, {{ $partnerBlockedByThem ? 'true' : 'false' }}, {{ $activeChatPartner?->id ?? 0 }});
+        });
+    @endif
+
     let isLoadingOlderMessages = false;
     let hasMoreOlderMessages = true;
     let oldestMessageId = 0;

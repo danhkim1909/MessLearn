@@ -59,6 +59,12 @@
         </button>
     </div>
 
+    <!-- Thong bao khi cuoc tro chuyen bi chan -->
+    <div id="chat-blocked-notice" class="hidden py-3 px-4 rounded-2xl bg-slate-100 dark:bg-slate-800 text-center text-xs text-slate-500 dark:text-slate-400">
+        <span id="chat-blocked-message">Bạn không thể gửi tin nhắn cho người dùng này.</span>
+        <button type="button" id="btn-unblock-from-chat" onclick="handleUnblockFromChatNotice()" class="ml-2 font-bold text-sky-500 hover:underline hidden">Bỏ chặn</button>
+    </div>
+
     <!-- Form gửi tin nhắn chính -->
     <form id="chat-form" class="flex items-end gap-2" onsubmit="sendChatMessage(event)">
         <input type="hidden" id="reply-to-id" value="">

@@ -12,22 +12,30 @@
                 }
             @endphp
             @if($isGroup)
-                <div class="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-500 flex items-center justify-center font-bold">
-                    <i data-lucide="users" class="w-5 h-5"></i>
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-500 flex items-center justify-center font-bold">
+                        <i data-lucide="users" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-extrabold text-slate-900 dark:text-white">{{ $chatName }}</h2>
+                        <p id="chat-header-status" class="text-xs text-emerald-500 font-medium">Đang hoạt động</p>
+                    </div>
                 </div>
             @else
-                <div class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold overflow-hidden">
-                    @if(isset($otherUser) && $otherUser && $otherUser->avatar_url)
-                        <img src="{{ $otherUser->avatar_url }}" alt="{{ $chatName }}" class="w-full h-full object-cover">
-                    @else
-                        {{ strtoupper(substr($chatName, 0, 1)) }}
-                    @endif
+                <div onclick="openPartnerProfileModal({{ $otherUser?->id ?? 0 }})" class="flex items-center gap-3 cursor-pointer group" title="Xem thông tin người dùng">
+                    <div class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold overflow-hidden transition-transform group-hover:scale-105">
+                        @if(isset($otherUser) && $otherUser && $otherUser->avatar_url)
+                            <img src="{{ $otherUser->avatar_url }}" alt="{{ $chatName }}" class="w-full h-full object-cover">
+                        @else
+                            {{ strtoupper(substr($chatName, 0, 1)) }}
+                        @endif
+                    </div>
+                    <div>
+                        <h2 class="font-extrabold text-slate-900 dark:text-white group-hover:text-sky-500 transition-colors">{{ $chatName }}</h2>
+                        <p id="chat-header-status" class="text-xs text-emerald-500 font-medium">Đang hoạt động</p>
+                    </div>
                 </div>
             @endif
-            <div>
-                <h2 class="font-extrabold text-slate-900 dark:text-white">{{ $chatName }}</h2>
-                <p id="chat-header-status" class="text-xs text-emerald-500 font-medium">Đang hoạt động</p>
-            </div>
         </div>
 
         <!-- Cac nut hanh dong tren Header: Goi thoai, Goi video, Phong hoc nhom, Tim kiem -->
@@ -51,11 +59,15 @@
                 </button>
             @else
                 <!-- Cuoc goi 1-1 -->
-                <button type="button" onclick="startCall('voice', null, 'call')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Gọi thoại">
+                <button type="button" id="btn-header-call-voice" onclick="startCall('voice', null, 'call')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Gọi thoại">
                     <i data-lucide="phone" class="w-5 h-5"></i>
                 </button>
-                <button type="button" onclick="startCall('video', null, 'call')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Gọi video">
+                <button type="button" id="btn-header-call-video" onclick="startCall('video', null, 'call')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Gọi video">
                     <i data-lucide="video" class="w-5 h-5"></i>
+                </button>
+                <!-- 3. Thong tin doi phuong -->
+                <button type="button" onclick="openPartnerProfileModal({{ $otherUser?->id ?? 0 }})" class="p-2 text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Thông tin người dùng">
+                    <i data-lucide="info" class="w-5 h-5"></i>
                 </button>
             @endif
             <button type="button" onclick="toggleChatSearch()" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Tìm kiếm tin nhắn">

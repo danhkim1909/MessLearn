@@ -8,6 +8,7 @@ use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Friendship;
 use App\Models\User;
+use App\Models\UserBlock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -44,39 +45,44 @@ class FriendshipController extends Controller
             $status = 'self';
             $label = 'Đây là tài khoản của bạn';
         } else {
-            $friendship = Friendship::where(function ($query) use ($currentUserId, $targetUser) {
-                $query->where('user_id', $currentUserId)->where('friend_id', $targetUser->id);
-            })->orWhere(function ($query) use ($currentUserId, $targetUser) {
-                $query->where('user_id', $targetUser->id)->where('friend_id', $currentUserId);
-            })->first();
+            $isBlockedByMe = Auth::user()->isBlocking($targetUser->id);
+            $isBlockedByThem = Auth::user()->isBlockedBy($targetUser->id);
 
-            if ($friendship) {
-                $friendshipId = $friendship->id;
-                if ($friendship->status === 'accepted') {
-                    $status = 'friend';
-                    $label = 'Đã là bạn bè';
+            if ($isBlockedByMe || $isBlockedByThem) {
+                $status = 'blocked';
+                $label = $isBlockedByMe ? 'Bạn đã chặn người dùng này' : 'Không thể kết bạn với người dùng này';
+            } else {
+                $friendship = Friendship::where(function ($query) use ($currentUserId, $targetUser) {
+                    $query->where('user_id', $currentUserId)->where('friend_id', $targetUser->id);
+                })->orWhere(function ($query) use ($currentUserId, $targetUser) {
+                    $query->where('user_id', $targetUser->id)->where('friend_id', $currentUserId);
+                })->first();
 
-                    // Tìm cuộc trò chuyện trực tiếp 1-1 giữa hai người nếu có
-                    $directConv = Conversation::where('type', 'direct')
-                        ->whereHas('participants', function ($q) use ($currentUserId) {
-                            $q->where('user_id', $currentUserId);
-                        })
-                        ->whereHas('participants', function ($q) use ($targetUser) {
-                            $q->where('user_id', $targetUser->id);
-                        })
-                        ->first();
-                    $conversationId = $directConv?->id;
-                } elseif ($friendship->status === 'pending') {
-                    if ($friendship->user_id === $currentUserId) {
-                        $status = 'pending_sent';
-                        $label = 'Đã gửi lời mời kết bạn (Chờ phản hồi)';
-                    } else {
-                        $status = 'pending_received';
-                        $label = 'Người này đã gửi lời mời cho bạn';
+                if ($friendship) {
+                    $friendshipId = $friendship->id;
+                    if ($friendship->status === 'accepted') {
+                        $status = 'friend';
+                        $label = 'Đã là bạn bè';
+
+                        // Tim cuoc tro chuyen truc tiep 1-1 giua hai nguoi neu co
+                        $directConv = Conversation::where('type', 'direct')
+                            ->whereHas('participants', function ($q) use ($currentUserId) {
+                                $q->where('user_id', $currentUserId);
+                            })
+                            ->whereHas('participants', function ($q) use ($targetUser) {
+                                $q->where('user_id', $targetUser->id);
+                            })
+                            ->first();
+                        $conversationId = $directConv?->id;
+                    } elseif ($friendship->status === 'pending') {
+                        if ($friendship->user_id === $currentUserId) {
+                            $status = 'pending_sent';
+                            $label = 'Đã gửi lời mời kết bạn (Chờ phản hồi)';
+                        } else {
+                            $status = 'pending_received';
+                            $label = 'Người này đã gửi lời mời cho bạn';
+                        }
                     }
-                } elseif ($friendship->status === 'blocked') {
-                    $status = 'blocked';
-                    $label = 'Không thể kết bạn với người dùng này';
                 }
             }
         }
@@ -119,6 +125,11 @@ class FriendshipController extends Controller
             return response()->json(['message' => 'Bạn không thể gửi lời mời kết bạn cho chính mình.'], 400);
         }
 
+        // Kiem tra chan lien he
+        if (Auth::user()->isBlocking($friend->id) || Auth::user()->isBlockedBy($friend->id)) {
+            return response()->json(['message' => 'Không thể gửi lời mời kết bạn do có chặn liên hệ.'], 400);
+        }
+
         $exists = Friendship::where(function ($query) use ($currentUserId, $friend) {
             $query->where('user_id', $currentUserId)->where('friend_id', $friend->id);
         })->orWhere(function ($query) use ($currentUserId, $friend) {
@@ -135,9 +146,6 @@ class FriendshipController extends Controller
                 } else {
                     return response()->json(['message' => 'Người này đã gửi lời mời cho bạn, vui lòng chấp nhận lời mời.'], 400);
                 }
-            }
-            if ($exists->status === 'blocked') {
-                return response()->json(['message' => 'Không thể gửi lời mời cho người dùng này.'], 400);
             }
         }
 
@@ -176,27 +184,7 @@ class FriendshipController extends Controller
                 ->where('status', 'pending')
                 ->firstOrFail();
 
-            $conversation = DB::transaction(function () use ($friendship) {
-                $friendship->update(['status' => 'accepted']);
-
-                $conv = Conversation::create([
-                    'type' => 'direct',
-                ]);
-
-                ConversationParticipant::create([
-                    'conversation_id' => $conv->id,
-                    'user_id' => $friendship->user_id,
-                    'role' => 'member',
-                ]);
-
-                ConversationParticipant::create([
-                    'conversation_id' => $conv->id,
-                    'user_id' => $friendship->friend_id,
-                    'role' => 'member',
-                ]);
-                
-                return $conv;
-            });
+            $friendship->update(['status' => 'accepted']);
 
             // Phat su kien Reverb toi nguoi gui loi moi ban dau
             broadcast(new FriendshipEvent(
@@ -209,20 +197,18 @@ class FriendshipController extends Controller
                     'email' => Auth::user()->email,
                 ],
                 friendshipId: $friendship->id,
-                conversationId: $conversation->id,
                 message: Auth::user()->name . ' đã đồng ý lời mời kết bạn của bạn.'
             ))->toOthers();
 
             if (request()->expectsJson()) {
                 return response()->json([
                     'success' => true,
-                    'message' => 'Đã đồng ý kết bạn và khởi tạo cuộc trò chuyện.',
-                    'conversation_id' => $conversation->id,
-                    'redirect_url' => route('app.chat-board.show', $conversation->id),
+                    'message' => 'Đã đồng ý kết bạn thành công.',
+                    'friendship_id' => $friendship->id,
                 ]);
             }
 
-            return redirect()->route('app.chat-board.show', $conversation->id)->with('success', 'Đã đồng ý kết bạn và khởi tạo cuộc trò chuyện.');
+            return redirect()->back()->with('success', 'Đã đồng ý kết bạn thành công.');
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("Lỗi khi đồng ý kết bạn (ID: {$id}): " . $e->getMessage());
             if (request()->expectsJson()) {
@@ -344,6 +330,124 @@ class FriendshipController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Đã hủy kết bạn thành công.'
+        ]);
+    }
+
+    public function getPartnerProfile($userId)
+    {
+        $currentUserId = Auth::id();
+        $targetUser = User::findOrFail($userId);
+
+        $isSelf = ($targetUser->id === $currentUserId);
+        $isBlockedByMe = Auth::user()->isBlocking($targetUser->id);
+        $isBlockedByThem = Auth::user()->isBlockedBy($targetUser->id);
+
+        $friendStatus = 'none';
+        $friendshipId = null;
+
+        if (!$isSelf) {
+            $friendship = Friendship::where(function ($q) use ($currentUserId, $targetUser) {
+                $q->where('user_id', $currentUserId)->where('friend_id', $targetUser->id);
+            })->orWhere(function ($q) use ($currentUserId, $targetUser) {
+                $q->where('user_id', $targetUser->id)->where('friend_id', $currentUserId);
+            })->first();
+
+            if ($friendship) {
+                $friendshipId = $friendship->id;
+                if ($friendship->status === 'accepted') {
+                    $friendStatus = 'friend';
+                } elseif ($friendship->status === 'pending') {
+                    $friendStatus = ($friendship->user_id === $currentUserId) ? 'pending_sent' : 'pending_received';
+                }
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'user' => [
+                'id' => $targetUser->id,
+                'name' => $targetUser->name,
+                'email' => $targetUser->email,
+                'avatar' => $targetUser->avatar_url,
+                'created_at' => $targetUser->created_at ? $targetUser->created_at->format('d/m/Y') : 'Chưa xác định',
+            ],
+            'is_self' => $isSelf,
+            'is_blocked_by_me' => $isBlockedByMe,
+            'is_blocked_by_them' => $isBlockedByThem,
+            'friend_status' => $friendStatus,
+            'friendship_id' => $friendshipId,
+        ]);
+    }
+
+    public function blockUser($userId)
+    {
+        $currentUserId = Auth::id();
+        if ((int)$userId === (int)$currentUserId) {
+            return response()->json(['message' => 'Bạn không thể tự chặn chính mình.'], 400);
+        }
+
+        $targetUser = User::findOrFail($userId);
+
+        UserBlock::firstOrCreate([
+            'blocker_id' => $currentUserId,
+            'blocked_id' => $targetUser->id,
+        ]);
+
+        // Huy quan he ban be neu dang ton tai
+        Friendship::where(function ($q) use ($currentUserId, $targetUser) {
+            $q->where('user_id', $currentUserId)->where('friend_id', $targetUser->id);
+        })->orWhere(function ($q) use ($currentUserId, $targetUser) {
+            $q->where('user_id', $targetUser->id)->where('friend_id', $currentUserId);
+        })->delete();
+
+        // Phat su kien Reverb toi nguoi bi chan
+        broadcast(new FriendshipEvent(
+            receiverId: (int)$targetUser->id,
+            action: 'user_blocked',
+            sender: [
+                'id' => Auth::id(),
+                'name' => Auth::user()->name,
+                'avatar' => Auth::user()->avatar_url,
+                'email' => Auth::user()->email,
+            ],
+            message: Auth::user()->name . ' đã chặn bạn.'
+        ))->toOthers();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã chặn người dùng thành công.'
+        ]);
+    }
+
+    public function unblockUser($userId)
+    {
+        $currentUserId = Auth::id();
+        $targetUser = User::findOrFail($userId);
+
+        $block = UserBlock::where('blocker_id', $currentUserId)
+            ->where('blocked_id', $targetUser->id)
+            ->first();
+
+        if ($block) {
+            $block->delete();
+
+            // Phat su kien Reverb toi nguoi duoc bo chan
+            broadcast(new FriendshipEvent(
+                receiverId: (int)$targetUser->id,
+                action: 'user_unblocked',
+                sender: [
+                    'id' => Auth::id(),
+                    'name' => Auth::user()->name,
+                    'avatar' => Auth::user()->avatar_url,
+                    'email' => Auth::user()->email,
+                ],
+                message: Auth::user()->name . ' đã bỏ chặn bạn.'
+            ))->toOthers();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã bỏ chặn người dùng thành công.'
         ]);
     }
 }

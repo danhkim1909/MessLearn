@@ -9,6 +9,7 @@ use App\Models\ConversationParticipant;
 use App\Models\Friendship;
 use App\Models\Message;
 use App\Models\User;
+use App\Models\UserBlock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,63 @@ use Illuminate\Support\Facades\Log;
 
 class ConversationController extends Controller
 {
+    public function getOrCreateDirectConversation(Request $request)
+    {
+        $request->validate([
+            'target_user_id' => 'required|exists:users,id',
+        ]);
+
+        $currentUserId = Auth::id();
+        $targetUserId = (int)$request->input('target_user_id');
+
+        if ($currentUserId === $targetUserId) {
+            return response()->json(['message' => 'Không thể tạo cuộc trò chuyện với chính mình.'], 400);
+        }
+
+        // Kiem tra chan lien he giua hai ben
+        if (Auth::user()->isBlocking($targetUserId) || Auth::user()->isBlockedBy($targetUserId)) {
+            return response()->json(['message' => 'Không thể mở cuộc trò chuyện do có chặn liên hệ.'], 403);
+        }
+
+        // Tim cuoc tro chuyen 1-1 da ton tai giua hai nguoi
+        $conversation = Conversation::where('type', 'direct')
+            ->whereHas('participants', function ($q) use ($currentUserId) {
+                $q->where('user_id', $currentUserId);
+            })
+            ->whereHas('participants', function ($q) use ($targetUserId) {
+                $q->where('user_id', $targetUserId);
+            })
+            ->first();
+
+        if (!$conversation) {
+            $conversation = DB::transaction(function () use ($currentUserId, $targetUserId) {
+                $conv = Conversation::create([
+                    'type' => 'direct',
+                ]);
+
+                ConversationParticipant::create([
+                    'conversation_id' => $conv->id,
+                    'user_id' => $currentUserId,
+                    'role' => 'member',
+                ]);
+
+                ConversationParticipant::create([
+                    'conversation_id' => $conv->id,
+                    'user_id' => $targetUserId,
+                    'role' => 'member',
+                ]);
+
+                return $conv;
+            });
+        }
+
+        return response()->json([
+            'success' => true,
+            'conversation_id' => $conversation->id,
+            'redirect_url' => route('app.chat-board.show', $conversation->id),
+        ]);
+    }
+
     public function storeGroup(Request $request)
     {
         $request->validate([
