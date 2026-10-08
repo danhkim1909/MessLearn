@@ -65,27 +65,41 @@
         <button type="button" id="btn-unblock-from-chat" onclick="handleUnblockFromChatNotice()" class="ml-2 font-bold text-sky-500 hover:underline hidden">Bỏ chặn</button>
     </div>
 
-    <!-- Form gửi tin nhắn chính -->
-    <form id="chat-form" class="flex items-end gap-2" onsubmit="sendChatMessage(event)">
-        <input type="hidden" id="reply-to-id" value="">
-        <input type="file" id="image-file-input" accept="image/*" class="hidden" onchange="handleImageSelected(event)">
-        <input type="file" id="document-file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.markdown,.csv,.tsv,.json,.sql,.cpp,.c,.java,.py,.html,.css,.js,.zip,.rar,.7z" class="hidden" onchange="handleDocumentSelected(event)">
-        <button type="button" onclick="document.getElementById('image-file-input').click()" class="p-3 text-slate-400 hover:text-sky-500 transition-colors" title="Đính kèm ảnh">
-            <i data-lucide="image" class="w-5 h-5"></i>
-        </button>
-        <button type="button" onclick="document.getElementById('document-file-input').click()" class="p-3 text-slate-400 hover:text-sky-500 transition-colors" title="Đính kèm tài liệu học tập">
-            <i data-lucide="paperclip" class="w-5 h-5"></i>
-        </button>
-        <div class="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-1 relative">
-            <textarea id="chat-input" rows="1" oninput="handleChatInputTyping()" class="w-full bg-transparent px-3 py-2 text-sm focus:outline-none dark:text-white resize-none max-h-32" placeholder="Nhập tin nhắn..." onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendChatMessage(event); }"></textarea>
+    @php
+        $isReadOnlyForMe = ($activeConversation->is_group ?? false) 
+            && $activeConversation->isReadOnly() 
+            && (($currentParticipant?->role ?? '') !== 'admin');
+    @endphp
+
+    @if($isReadOnlyForMe)
+        <!-- Thong bao che do Chi doc (Read Only) -->
+        <div id="chat-readonly-notice" class="py-3.5 px-4 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-center text-xs text-slate-600 dark:text-slate-300 flex items-center justify-center gap-2 shadow-xs">
+            <i data-lucide="lock" class="w-4 h-4 text-amber-500 shrink-0"></i>
+            <span>Nhóm đang ở chế độ Chỉ đọc. Chỉ Trưởng nhóm mới có thể gửi tin nhắn.</span>
         </div>
-        <button type="button" id="btn-record-voice" onclick="startVoiceRecording()" class="p-3 text-slate-400 hover:text-sky-500 transition-colors rounded-xl flex items-center justify-center shrink-0" title="Ghi âm">
-            <i data-lucide="mic" class="w-5 h-5"></i>
-        </button>
-        <button type="submit" class="p-3 bg-sky-500 hover:bg-sky-600 text-white rounded-xl shadow-md shadow-sky-500/20 transition-all flex items-center justify-center shrink-0">
-            <i data-lucide="send" class="w-5 h-5 ml-1"></i>
-        </button>
-    </form>
+    @else
+        <!-- Form gửi tin nhắn chính -->
+        <form id="chat-form" class="flex items-end gap-2" onsubmit="sendChatMessage(event)">
+            <input type="hidden" id="reply-to-id" value="">
+            <input type="file" id="image-file-input" accept="image/*" class="hidden" onchange="handleImageSelected(event)">
+            <input type="file" id="document-file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.markdown,.csv,.tsv,.json,.sql,.cpp,.c,.java,.py,.html,.css,.js,.zip,.rar,.7z" class="hidden" onchange="handleDocumentSelected(event)">
+            <button type="button" onclick="document.getElementById('image-file-input').click()" class="p-3 text-slate-400 hover:text-sky-500 transition-colors" title="Đính kèm ảnh">
+                <i data-lucide="image" class="w-5 h-5"></i>
+            </button>
+            <button type="button" onclick="document.getElementById('document-file-input').click()" class="p-3 text-slate-400 hover:text-sky-500 transition-colors" title="Đính kèm tài liệu học tập">
+                <i data-lucide="paperclip" class="w-5 h-5"></i>
+            </button>
+            <div class="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-1 relative">
+                <textarea id="chat-input" rows="1" oninput="handleChatInputTyping()" class="w-full bg-transparent px-3 py-2 text-sm focus:outline-none dark:text-white resize-none max-h-32" placeholder="Nhập tin nhắn..." onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendChatMessage(event); }"></textarea>
+            </div>
+            <button type="button" id="btn-record-voice" onclick="startVoiceRecording()" class="p-3 text-slate-400 hover:text-sky-500 transition-colors rounded-xl flex items-center justify-center shrink-0" title="Ghi âm">
+                <i data-lucide="mic" class="w-5 h-5"></i>
+            </button>
+            <button type="submit" class="p-3 bg-sky-500 hover:bg-sky-600 text-white rounded-xl shadow-md shadow-sky-500/20 transition-all flex items-center justify-center shrink-0">
+                <i data-lucide="send" class="w-5 h-5 ml-1"></i>
+            </button>
+        </form>
+    @endif
 
     <!-- Khay Ghi âm Tin nhắn thoại -->
     <div id="voice-recording-container" class="hidden items-center gap-3 w-full bg-slate-50 dark:bg-slate-800 border border-sky-400/50 dark:border-sky-500/50 rounded-2xl p-2 px-4">

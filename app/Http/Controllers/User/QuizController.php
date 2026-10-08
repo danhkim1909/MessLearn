@@ -89,7 +89,11 @@ class QuizController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $quiz = Quiz::with('questions.options')->findOrFail($quizId);
+        $quiz = Quiz::with(['questions.options', 'message'])->findOrFail($quizId);
+
+        if (!$quiz->message || (int)$quiz->message->conversation_id !== (int)$conversation->id) {
+            return response()->json(['message' => 'Bài kiểm tra không thuộc cuộc trò chuyện này.'], 404);
+        }
 
         $schema = [
             'questions' => $quiz->questions->map(function ($q) {
@@ -123,7 +127,11 @@ class QuizController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $quiz = Quiz::with('questions.options')->findOrFail($quizId);
+        $quiz = Quiz::with(['questions.options', 'message'])->findOrFail($quizId);
+
+        if (!$quiz->message || (int)$quiz->message->conversation_id !== (int)$conversation->id) {
+            return response()->json(['message' => 'Bài kiểm tra không thuộc cuộc trò chuyện này.'], 404);
+        }
 
         $existing = QuizSubmission::where('quiz_id', $quizId)
             ->where('user_id', Auth::id())
@@ -238,6 +246,10 @@ class QuizController extends Controller
             'submissions.answers.selectedOption',
             'questions.options'
         ])->findOrFail($quizId);
+
+        if (!$quiz->message || (int)$quiz->message->conversation_id !== (int)$conversation->id) {
+            return response()->json(['message' => 'Bài kiểm tra không thuộc cuộc trò chuyện này.'], 404);
+        }
 
         $isOwner = $quiz->message && $quiz->message->user_id == $userId;
 

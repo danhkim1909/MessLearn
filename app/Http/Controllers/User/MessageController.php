@@ -76,7 +76,7 @@ class MessageController extends Controller
                 $type = 'image';
             } elseif ($hasDocument) {
                 $request->validate([
-                    'document' => ['required', 'file', 'max:25600'],
+                    'document' => ['required', 'file', 'max:25600', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,md,markdown,csv,tsv,json,sql,cpp,c,java,py,html,css,js,zip,rar,7z,tar,gz'],
                     'body' => 'nullable|string|max:2000',
                     'reply_to_id' => 'nullable|exists:messages,id',
                 ]);
@@ -126,6 +126,14 @@ class MessageController extends Controller
 
             $message->load(['user', 'replyTo.user', 'reactions']);
 
+            // Cap nhat moc da doc cho nguoi gui
+            $conversation->participants()
+                ->where('user_id', $userId)
+                ->update([
+                    'last_read_message_id' => $message->id,
+                    'last_read_at' => now(),
+                ]);
+
             $conversation->touch();
 
             broadcast(new MessageSent($message))->toOthers();
@@ -144,6 +152,10 @@ class MessageController extends Controller
 
             if (!$conversation->participants()->where('user_id', $userId)->exists()) {
                 return response()->json(['error' => 'Forbidden'], 403);
+            }
+
+            if ((int)$message->conversation_id !== (int)$conversation->id) {
+                return response()->json(['error' => 'Tin nhắn không thuộc cuộc trò chuyện này.'], 400);
             }
 
             $request->validate([
@@ -205,6 +217,15 @@ class MessageController extends Controller
             ]);
 
             $message->load(['user', 'replyTo.user', 'reactions']);
+
+            // Cap nhat moc da doc cho nguoi tung xuc xac
+            $conversation->participants()
+                ->where('user_id', $userId)
+                ->update([
+                    'last_read_message_id' => $message->id,
+                    'last_read_at' => now(),
+                ]);
+
             $conversation->touch();
 
             broadcast(new MessageSent($message))->toOthers();
@@ -248,6 +269,15 @@ class MessageController extends Controller
             ]);
 
             $message->load(['user', 'replyTo.user', 'reactions']);
+
+            // Cap nhat moc da doc cho nguoi tao thach dau
+            $conversation->participants()
+                ->where('user_id', $userId)
+                ->update([
+                    'last_read_message_id' => $message->id,
+                    'last_read_at' => now(),
+                ]);
+
             $conversation->touch();
 
             broadcast(new MessageSent($message))->toOthers();
@@ -266,6 +296,10 @@ class MessageController extends Controller
 
             if (!$conversation->participants()->where('user_id', $userId)->exists()) {
                 return response()->json(['error' => 'Forbidden'], 403);
+            }
+
+            if ((int)$message->conversation_id !== (int)$conversation->id) {
+                return response()->json(['error' => 'Ván đấu không thuộc cuộc trò chuyện này.'], 400);
             }
 
             if ($message->type !== 'game_rps' || ($message->metadata['status'] ?? '') !== 'waiting') {
@@ -480,6 +514,14 @@ class MessageController extends Controller
                 'metadata' => $metadata,
             ]);
 
+            // Cap nhat moc da doc cho nguoi tao lich hen
+            $conversation->participants()
+                ->where('user_id', $userId)
+                ->update([
+                    'last_read_message_id' => $message->id,
+                    'last_read_at' => now(),
+                ]);
+
             $conversation->touch();
             $message->load(['user', 'replyTo.user', 'quiz.submissions', 'reactions']);
 
@@ -543,6 +585,10 @@ class MessageController extends Controller
                 return response()->json(['error' => 'Forbidden'], 403);
             }
 
+            if ((int)$message->conversation_id !== (int)$conversation->id) {
+                return response()->json(['error' => 'Tin nhắn không thuộc cuộc trò chuyện này.'], 400);
+            }
+
             if ($message->type === 'recalled') {
                 return response()->json(['error' => 'Khong the chuyen tiep tin nhan da thu hoi'], 400);
             }
@@ -579,6 +625,14 @@ class MessageController extends Controller
                     'reply_to_id' => null,
                     'metadata' => $metadata,
                 ]);
+
+                // Cap nhat moc da doc o cuoc tro chuyen dich
+                $targetConv->participants()
+                    ->where('user_id', $userId)
+                    ->update([
+                        'last_read_message_id' => $newMsg->id,
+                        'last_read_at' => now(),
+                    ]);
 
                 $newMsg->load(['user', 'replyTo.user', 'quiz.submissions', 'reactions']);
                 $targetConv->touch();

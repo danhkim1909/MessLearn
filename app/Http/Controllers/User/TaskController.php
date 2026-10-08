@@ -22,7 +22,7 @@ class TaskController extends Controller
 
         $tasks = $conversation->tasks()
             ->with(['creator', 'assignee'])
-            ->orderByRaw("FIELD(status, 'todo', 'in_progress', 'done')")
+            ->orderByRaw("CASE status WHEN 'todo' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'done' THEN 3 ELSE 4 END")
             ->orderBy('due_date')
             ->latest('id')
             ->get();

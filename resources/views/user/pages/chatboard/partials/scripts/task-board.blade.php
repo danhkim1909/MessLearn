@@ -167,13 +167,14 @@ function buildTaskCardHtml(task) {
     // Xu ly nguoi duoc giao
     let assigneeHtml = '';
     if (task.assignee) {
+        const safeAssigneeName = escapeHtml(task.assignee.name || '');
         const initial = task.assignee.name ? task.assignee.name.charAt(0).toUpperCase() : 'U';
         assigneeHtml = `
-            <div class="flex items-center gap-1.5" title="Người nhận: ${task.assignee.name}">
+            <div class="flex items-center gap-1.5" title="Người nhận: ${safeAssigneeName}">
                 <div class="w-5 h-5 rounded-full overflow-hidden bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300 font-bold text-[9px] flex items-center justify-center shrink-0">
-                    ${task.assignee.avatar_url ? `<img src="${task.assignee.avatar_url}" alt="${task.assignee.name}" class="w-full h-full object-cover">` : initial}
+                    ${task.assignee.avatar_url ? `<img src="${task.assignee.avatar_url}" alt="${safeAssigneeName}" class="w-full h-full object-cover">` : initial}
                 </div>
-                <span class="text-[11px] font-medium text-slate-600 dark:text-slate-300 truncate max-w-[100px]">${task.assignee.name}</span>
+                <span class="text-[11px] font-medium text-slate-600 dark:text-slate-300 truncate max-w-[100px]">${safeAssigneeName}</span>
             </div>
         `;
     } else {

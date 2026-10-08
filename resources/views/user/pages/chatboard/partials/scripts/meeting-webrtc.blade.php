@@ -51,6 +51,11 @@
     let ringtoneAudioContext = null;
     let ringtoneInterval = null;
 
+    let peerDisconnectTimers = {};
+    let incomingCallRingTimeoutTimer = null;
+    const pageConversationId = {{ $activeConversation?->id ?? 'null' }};
+    let subscribedConversationChannels = new Set();
+
     let activeConversationId = {{ $activeConversation?->id ?? 'null' }};
     const currentUserId = {{ Auth::id() }};
     const currentUserName = '{{ addslashes(Auth::user()->name) }}';
@@ -63,6 +68,15 @@
             { urls: 'stun:stun2.l.google.com:19302' }
         ]
     };
+
+    function ensureConversationEchoSubscribed(convId) {
+        if (!convId || typeof window.Echo === 'undefined') return;
+        const convIdNum = Number(convId);
+        if (subscribedConversationChannels.has(convIdNum)) return;
+        subscribedConversationChannels.add(convIdNum);
+        window.Echo.private(`conversation.${convIdNum}`)
+            .listen('.CallSignalEvent', handleCallSignal);
+    }
 
     // --- Am thanh chuong reo bang Web Audio API ---
     function playTone(freq1, freq2, duration) {
@@ -173,6 +187,7 @@
         activeCallType = type;
         activeCallMode = callMode || 'call';
         isInitiator = true;
+        ensureConversationEchoSubscribed(activeConversationId);
 
         try {
             // Yeu cau quyen truy cap Micro va Camera
@@ -431,7 +446,7 @@
             card.id = 'remote-card-' + rId;
             card.className = 'relative bg-slate-900/90 rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center shadow-lg transition-all duration-300 min-h-[180px]';
             card.innerHTML = `
-                <video id="remote-video-${rId}" autoplay playsinline class="w-full h-full object-cover hidden"></video>
+                <video id="remote-video-${rId}" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
                 <audio id="remote-audio-${rId}" autoplay playsinline class="hidden"></audio>
                 
                 <div id="remote-fallback-${rId}" class="flex flex-col items-center gap-3">
@@ -504,19 +519,31 @@
         if (videoEl && fallbackEl) {
             // Neu thanh vien nay dang chia se man hinh vao Spotlight
             if (currentScreenSharerId && Number(currentScreenSharerId) === rId) {
-                videoEl.srcObject = null;
                 videoEl.classList.add('hidden');
                 fallbackEl.classList.remove('hidden');
-            } else if (stream && activeCallType === 'video' && !userState.isMutedVideo) {
-                if (videoEl.srcObject !== stream) {
-                    videoEl.srcObject = stream;
-                }
-                videoEl.classList.remove('hidden');
-                fallbackEl.classList.add('hidden');
-                videoEl.play().catch(e => console.warn('Video play blocked:', e));
             } else {
-                videoEl.classList.add('hidden');
-                fallbackEl.classList.remove('hidden');
+                const hasLiveVideoTrack = stream && stream.getVideoTracks && stream.getVideoTracks().some(t => t.readyState === 'live');
+                const shouldShowVideo = stream && (activeCallType === 'video' || hasLiveVideoTrack) && !userState.isMutedVideo;
+
+                if (shouldShowVideo) {
+                    if (videoEl.srcObject !== stream) {
+                        videoEl.srcObject = stream;
+                    }
+                    videoEl.muted = true;
+                    videoEl.classList.remove('hidden');
+                    fallbackEl.classList.add('hidden');
+
+                    const playRemoteVideo = () => {
+                        if (videoEl.paused) {
+                            videoEl.play().catch(e => console.warn('Video play blocked:', e));
+                        }
+                    };
+                    videoEl.onloadedmetadata = playRemoteVideo;
+                    playRemoteVideo();
+                } else {
+                    videoEl.classList.add('hidden');
+                    fallbackEl.classList.remove('hidden');
+                }
             }
         }
 
@@ -527,6 +554,11 @@
     function removeParticipant(userId) {
         const rId = Number(userId);
         if (!rId) return;
+
+        if (peerDisconnectTimers[rId]) {
+            clearTimeout(peerDisconnectTimers[rId]);
+            delete peerDisconnectTimers[rId];
+        }
 
         if (peers[rId]) {
             peers[rId].close();
@@ -836,9 +868,28 @@
     // --- Xu ly khi co cuoc goi den ---
     function handleIncomingCall(data) {
         incomingCallData = data;
-        activeConversationId = data.conversationId;
         activeRoomCode = data.roomCode;
         activeCallType = data.callType;
+
+        if (incomingCallRingTimeoutTimer) {
+            clearTimeout(incomingCallRingTimeoutTimer);
+        }
+        incomingCallRingTimeoutTimer = setTimeout(() => {
+            stopRingtone();
+            const modalIncoming = document.getElementById('modal-incoming-call');
+            if (modalIncoming) modalIncoming.classList.add('hidden');
+            if (incomingCallData) {
+                if (typeof Toastify === 'function') {
+                    Toastify({
+                        text: 'Cuộc gọi đến đã kết thúc (không trả lời).',
+                        style: { background: '#64748b', borderRadius: '0.5rem' },
+                        duration: 3500
+                    }).showToast();
+                }
+                incomingCallData = null;
+            }
+            incomingCallRingTimeoutTimer = null;
+        }, 45000);
 
         preCallMutedAudio = false;
         preCallMutedVideo = false;
@@ -890,12 +941,20 @@
     // --- Chap nhan cuoc goi den ---
     window.acceptIncomingCall = async function() {
         stopRingtone();
+        if (incomingCallRingTimeoutTimer) {
+            clearTimeout(incomingCallRingTimeoutTimer);
+            incomingCallRingTimeoutTimer = null;
+        }
         const modalIncoming = document.getElementById('modal-incoming-call');
         if (modalIncoming) modalIncoming.classList.add('hidden');
 
         if (!incomingCallData) return;
 
         isInitiator = false;
+        activeConversationId = incomingCallData.conversationId;
+        activeRoomCode = incomingCallData.roomCode;
+        activeCallType = incomingCallData.callType;
+        ensureConversationEchoSubscribed(activeConversationId);
 
         try {
             const constraints = {
@@ -1008,6 +1067,10 @@
     // --- Tu choi cuoc goi den ---
     window.rejectIncomingCall = async function() {
         stopRingtone();
+        if (incomingCallRingTimeoutTimer) {
+            clearTimeout(incomingCallRingTimeoutTimer);
+            incomingCallRingTimeoutTimer = null;
+        }
         const modalIncoming = document.getElementById('modal-incoming-call');
         if (modalIncoming) modalIncoming.classList.add('hidden');
 
@@ -1083,6 +1146,18 @@
                 }
             }
 
+            if (event.track) {
+                event.track.onunmute = () => {
+                    renderOrUpdateParticipantCard(rId);
+                    if (currentScreenSharerId && Number(currentScreenSharerId) === rId) {
+                        const screenVideo = document.getElementById('screen-share-video');
+                        if (screenVideo && screenVideo.paused) {
+                            screenVideo.play().catch(e => console.warn('Spotlight onunmute play waiting:', e));
+                        }
+                    }
+                };
+            }
+
             renderOrUpdateParticipantCard(rId);
 
             // Neu thanh vien nay dang chia se man hinh, nap luong vao video spotlight
@@ -1090,14 +1165,15 @@
                 const screenVideo = document.getElementById('screen-share-video');
                 if (screenVideo) {
                     screenVideo.muted = true;
-                    screenVideo.srcObject = stream;
+                    if (screenVideo.srcObject !== stream) {
+                        screenVideo.srcObject = stream;
+                    }
                     const playOnTrack = () => {
                         if (screenVideo.paused) {
                             screenVideo.play().catch(e => console.warn('Screen video play retry blocked:', e));
                         }
                     };
                     screenVideo.onloadedmetadata = playOnTrack;
-                    event.track.onunmute = playOnTrack;
                     playOnTrack();
                 }
             }
@@ -1119,13 +1195,28 @@
         pc.onconnectionstatechange = () => {
             const state = pc.connectionState;
             if (state === 'connected') {
+                if (peerDisconnectTimers[rId]) {
+                    clearTimeout(peerDisconnectTimers[rId]);
+                    delete peerDisconnectTimers[rId];
+                }
                 renderOrUpdateParticipantCard(rId);
                 updateAdaptiveVideoGrid();
-            } else if (state === 'disconnected' || state === 'failed') {
-                console.warn(`Peer ${rId} connection state: ${state}`);
-                if (state === 'failed') {
-                    removeParticipant(rId);
+            } else if (state === 'disconnected') {
+                console.warn(`Peer ${rId} connection disconnected, cho phuc hoi trong 8 giay...`);
+                if (!peerDisconnectTimers[rId]) {
+                    peerDisconnectTimers[rId] = setTimeout(() => {
+                        console.warn(`Peer ${rId} mat ket noi qua lau, go khoi phong hop.`);
+                        removeParticipant(rId);
+                        delete peerDisconnectTimers[rId];
+                    }, 8000);
                 }
+            } else if (state === 'failed' || state === 'closed') {
+                console.warn(`Peer ${rId} connection state: ${state}`);
+                if (peerDisconnectTimers[rId]) {
+                    clearTimeout(peerDisconnectTimers[rId]);
+                    delete peerDisconnectTimers[rId];
+                }
+                removeParticipant(rId);
             }
         };
 
@@ -1165,6 +1256,17 @@
         const rId = Number(remoteUserId);
         const pc = getOrCreatePeerConnection(rId);
         if (!pc) return;
+
+        // Tranh tao Offer trung lap neu ket noi dang trong qua trinh dam phan
+        if (pc.signalingState !== 'stable') {
+            console.warn(`Bo qua tao Offer cho peer ${rId} do signalingState dang la: ${pc.signalingState}`);
+            return;
+        }
+
+        // Neu da connected va khong can nang cap screen stream thi khong tao lai
+        if (pc.connectionState === 'connected' && !isSharingScreen) {
+            return;
+        }
 
         try {
             const offer = await pc.createOffer();
@@ -1384,6 +1486,7 @@
             const screenTrack = screenStream.getVideoTracks()[0];
             if (screenTrack) {
                 screenTrack.contentHint = 'detail';
+                screenTrack.enabled = true;
             }
 
             // Thay the track tren tat ca cac Peer trong Mesh
@@ -1524,6 +1627,16 @@
         stopRingtone();
         stopCallTimer();
 
+        if (incomingCallRingTimeoutTimer) {
+            clearTimeout(incomingCallRingTimeoutTimer);
+            incomingCallRingTimeoutTimer = null;
+        }
+
+        for (const pId in peerDisconnectTimers) {
+            clearTimeout(peerDisconnectTimers[pId]);
+        }
+        peerDisconnectTimers = {};
+
         if (localStream) {
             localStream.getTracks().forEach(t => t.stop());
             localStream = null;
@@ -1548,6 +1661,7 @@
 
         activeMeetingId = null;
         activeRoomCode = null;
+        activeConversationId = pageConversationId;
         isSharingScreen = false;
         currentScreenSharerId = null;
         currentScreenSharerName = '';
@@ -1772,6 +1886,19 @@
                 break;
 
             case 'reject_call':
+                const isGroupReject = !!(e.payload?.is_group || isGroupMeeting);
+                if (isGroupReject) {
+                    const rejectedName = e.payload?.rejected_user_name || e.senderName || 'Một thành viên';
+                    if (typeof Toastify === 'function') {
+                        Toastify({
+                            text: `${rejectedName} đã từ chối tham gia cuộc gọi.`,
+                            style: { background: '#f59e0b', borderRadius: '0.5rem' },
+                            duration: 3500
+                        }).showToast();
+                    }
+                    break;
+                }
+
                 stopRingtone();
                 if (typeof Toastify === 'function') {
                     Toastify({ text: 'Đối phương đã từ chối cuộc gọi.', style: { background: '#f43f5e' } }).showToast();
@@ -1960,7 +2087,9 @@
                 const sharerStream = remoteStreams[newSharerId];
                 if (screenVideo && sharerStream) {
                     screenVideo.muted = true;
-                    screenVideo.srcObject = sharerStream;
+                    if (screenVideo.srcObject !== sharerStream) {
+                        screenVideo.srcObject = sharerStream;
+                    }
 
                     const playSpotlight = () => {
                         if (screenVideo.paused) {
@@ -1970,6 +2099,12 @@
 
                     screenVideo.onloadedmetadata = playSpotlight;
                     screenVideo.oncanplay = playSpotlight;
+
+                    const vTrack = sharerStream.getVideoTracks ? sharerStream.getVideoTracks()[0] : null;
+                    if (vTrack) {
+                        vTrack.onunmute = playSpotlight;
+                    }
+
                     playSpotlight();
                 }
 
@@ -2030,23 +2165,24 @@
 
         // 2. Kenh hoi thoai (neu dang o trong phong chat)
         if (activeConversationId) {
-            window.Echo.private(`conversation.${activeConversationId}`)
-                .listen('.CallSignalEvent', handleCallSignal);
+            ensureConversationEchoSubscribed(activeConversationId);
         }
     });
 
     // --- Tu dong roi phong khi tat tab hoac dong trinh duyet (Chong treo phong hop) ---
     window.addEventListener('beforeunload', () => {
         if (activeRoomCode && activeConversationId) {
-            const leavePayload = JSON.stringify({
-                room_code: activeRoomCode,
-                call_type: activeCallType,
-                end_for_all: false
-            });
             const leaveUrl = `/app/conversation/${activeConversationId}/meeting/leave`;
             if (navigator.sendBeacon) {
-                const blob = new Blob([leavePayload], { type: 'application/json' });
-                navigator.sendBeacon(leaveUrl, blob);
+                const formData = new FormData();
+                formData.append('room_code', activeRoomCode);
+                formData.append('call_type', activeCallType);
+                formData.append('end_for_all', '0');
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                if (csrfToken) {
+                    formData.append('_token', csrfToken);
+                }
+                navigator.sendBeacon(leaveUrl, formData);
             }
         }
     });

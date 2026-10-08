@@ -5,7 +5,7 @@
      data-is-pinned="{{ ($currentParticipant?->is_pinned ?? false) ? '1' : '0' }}"
      data-is-muted="{{ ($currentParticipant && $currentParticipant->isMuted()) ? '1' : '0' }}"
      data-nickname="{{ $currentParticipant?->nickname ?? '' }}"
-     data-original-name="{{ $activeConversation->is_group ? $activeConversation->name : (($activeConversation->participants->where('user_id', '!=', Auth::id())->first()->user?->name) ?? 'Nguoi dung') }}">
+     data-original-name="{{ $activeConversation->is_group ? $activeConversation->name : (($activeConversation->participants->where('user_id', '!=', Auth::id())->first()->user?->name) ?? 'Người dùng') }}">
     <div class="h-16 flex items-center justify-between px-6">
         <div class="flex items-center gap-3">
             @php
@@ -16,7 +16,7 @@
                     $chatName = $customNickname ?: $originalName;
                 } else {
                     $otherUser = $activeConversation->participants->where('user_id', '!=', Auth::id())->first()->user ?? null;
-                    $originalName = $otherUser ? $otherUser->name : 'Nguoi dung';
+                    $originalName = $otherUser ? $otherUser->name : 'Người dùng';
                     $chatName = $customNickname ?: $originalName;
                 }
                 $isPinned = $currentParticipant?->is_pinned ?? false;
@@ -59,25 +59,30 @@
             @endif
         </div>
 
-        <!-- Cac nut hanh dong tren Header: Goi thoai, Goi video, Phong hoc nhom, Tim kiem, Ghim, Thong bao, Biet danh -->
+        <!-- Cac nut hanh dong tren Header: Goi thoai, Goi video, Tim kiem, Menu thong tin ben phai -->
         <div class="flex items-center gap-1.5">
             @if($isGroup)
-                <!-- 1. Goi thoai nhom (Do chuong ca nhom) -->
-                <button type="button" onclick="startCall('voice', null, 'call')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Gọi thoại nhóm (Đổ chuông)">
-                    <i data-lucide="phone" class="w-5 h-5"></i>
-                </button>
-                <!-- 2. Goi video nhom (Do chuong ca nhom) -->
-                <button type="button" onclick="startCall('video', null, 'call')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Gọi video nhóm (Đổ chuông)">
-                    <i data-lucide="video" class="w-5 h-5"></i>
-                </button>
-                <!-- 3. Phong hoc truc tuyen (Mo qua lobby, phat banner, giơ tay, chu phong) -->
-                <button type="button" onclick="openMeetingLobby('video')" class="p-2 text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Phòng học & Họp trực tuyến">
-                    <i data-lucide="presentation" class="w-5 h-5"></i>
-                </button>
-                <!-- 4. Quan ly thanh vien nhom hoc tap -->
-                <button type="button" onclick="openGroupMembersModal()" class="p-2 text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Thành viên nhóm">
-                    <i data-lucide="users" class="w-5 h-5"></i>
-                </button>
+                @php
+                    $canStartGroupCall = $activeConversation->canMemberStartCall() || (($currentParticipant?->role ?? '') === 'admin');
+                @endphp
+                @if($canStartGroupCall)
+                    <!-- 1. Goi thoai nhom (Do chuong ca nhom) -->
+                    <button type="button" onclick="startCall('voice', null, 'call')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Gọi thoại nhóm (Đổ chuông)">
+                        <i data-lucide="phone" class="w-5 h-5"></i>
+                    </button>
+                    <!-- 2. Goi video nhom (Do chuong ca nhom) -->
+                    <button type="button" onclick="startCall('video', null, 'call')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Gọi video nhóm (Đổ chuông)">
+                        <i data-lucide="video" class="w-5 h-5"></i>
+                    </button>
+                @else
+                    <!-- Nut bi vo hieu hoa khi Truong nhom tat quyen goi -->
+                    <button type="button" disabled class="p-2 text-slate-300 dark:text-slate-600 cursor-not-allowed rounded-xl transition-all opacity-50" title="Trưởng nhóm đã tắt quyền bắt đầu cuộc gọi đối với thành viên">
+                        <i data-lucide="phone-off" class="w-5 h-5"></i>
+                    </button>
+                    <button type="button" disabled class="p-2 text-slate-300 dark:text-slate-600 cursor-not-allowed rounded-xl transition-all opacity-50" title="Trưởng nhóm đã tắt quyền bắt đầu cuộc gọi đối với thành viên">
+                        <i data-lucide="video-off" class="w-5 h-5"></i>
+                    </button>
+                @endif
             @else
                 <!-- Cuoc goi 1-1 -->
                 <button type="button" id="btn-header-call-voice" onclick="startCall('voice', null, 'call')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Gọi thoại">
@@ -86,68 +91,16 @@
                 <button type="button" id="btn-header-call-video" onclick="startCall('video', null, 'call')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Gọi video">
                     <i data-lucide="video" class="w-5 h-5"></i>
                 </button>
-                <!-- 3. Thong tin doi phuong -->
-                <button type="button" onclick="openPartnerProfileModal({{ $otherUser?->id ?? 0 }})" class="p-2 text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Thông tin người dùng">
-                    <i data-lucide="info" class="w-5 h-5"></i>
-                </button>
             @endif
 
-            <!-- 5. Tim kiem tin nhan -->
+            <!-- 3. Tim kiem tin nhan -->
             <button type="button" onclick="toggleChatSearch()" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Tìm kiếm tin nhắn">
                 <i data-lucide="search" class="w-5 h-5"></i>
             </button>
 
-            <!-- 6. Ghim cuoc tro chuyen (Pin) -->
-            <button type="button" 
-                    id="btn-header-pin-chat" 
-                    onclick="handleTogglePinChat()" 
-                    class="p-2 {{ $isPinned ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/30' : 'text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800' }} rounded-xl transition-all" 
-                    title="{{ $isPinned ? 'Bỏ ghim cuộc trò chuyện' : 'Ghim cuộc trò chuyện lên đầu' }}">
-                <i data-lucide="pin" class="w-5 h-5 {{ $isPinned ? 'fill-amber-500' : '' }}"></i>
-            </button>
-
-            <!-- 7. Tat / Bat thong bao (Mute) -->
-            <div class="relative" id="header-mute-container">
-                <button type="button" 
-                        id="btn-header-mute-chat" 
-                        onclick="toggleMuteDropdown(event)" 
-                        class="p-2 {{ $isMuted ? 'text-rose-500 bg-rose-50 dark:bg-rose-950/30' : 'text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800' }} rounded-xl transition-all" 
-                        title="{{ $isMuted ? 'Đang tắt thông báo (Nhấn để tùy chỉnh)' : 'Tắt thông báo cuộc trò chuyện' }}">
-                    <i data-lucide="{{ $isMuted ? 'bell-off' : 'bell' }}" class="w-5 h-5"></i>
-                </button>
-                <div id="header-mute-dropdown" class="hidden absolute right-0 mt-2 w-52 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl py-1.5 z-50 text-xs">
-                    <div class="px-3.5 py-1.5 font-bold text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700/60 uppercase tracking-wider text-[10px]">
-                        Cài đặt thông báo
-                    </div>
-                    <div id="mute-unmute-option-wrap" class="{{ $isMuted ? '' : 'hidden' }}">
-                        <button type="button" onclick="handleSelectMuteDuration('unmute')" class="w-full text-left px-3.5 py-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-semibold flex items-center gap-2">
-                            <i data-lucide="bell" class="w-4 h-4"></i>
-                            <span>Bật lại thông báo</span>
-                        </button>
-                        <div class="border-t border-slate-100 dark:border-slate-700/60 my-1"></div>
-                    </div>
-                    <button type="button" onclick="handleSelectMuteDuration('1h')" class="w-full text-left px-3.5 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-between">
-                        <span>Tắt trong 1 giờ</span>
-                        <span class="text-[10px] text-slate-400">1h</span>
-                    </button>
-                    <button type="button" onclick="handleSelectMuteDuration('8h')" class="w-full text-left px-3.5 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-between">
-                        <span>Tắt trong 8 giờ</span>
-                        <span class="text-[10px] text-slate-400">8h</span>
-                    </button>
-                    <button type="button" onclick="handleSelectMuteDuration('forever')" class="w-full text-left px-3.5 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-between">
-                        <span>Cho đến khi mở lại</span>
-                        <i data-lucide="bell-off" class="w-3.5 h-3.5 text-slate-400"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- 8. Dat biet danh cuoc tro chuyen -->
-            <button type="button" 
-                    id="btn-header-nickname" 
-                    onclick="openChangeNicknameModal()" 
-                    class="p-2 text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" 
-                    title="Đặt biệt danh">
-                <i data-lucide="tag" class="w-5 h-5"></i>
+            <!-- 4. Bat / Tat Menu thong tin ben phai (Panel Toggle Zalo-style) -->
+            <button type="button" id="btn-toggle-right-sidebar" onclick="toggleRightSidebar()" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Thông tin cuộc trò chuyện">
+                <i data-lucide="panel-right" class="w-5 h-5"></i>
             </button>
         </div>
     </div>

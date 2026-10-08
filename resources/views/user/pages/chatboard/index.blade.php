@@ -26,9 +26,9 @@
         @endif
     </main>
 
-    {{-- Cột 4: Không gian học tập --}}
+    {{-- Cột 4: Bảng thông tin cuộc trò chuyện & Không gian học tập kiểu Zalo --}}
     @if(isset($activeConversation))
-        @include('user.pages.chatboard.partials.sidebar-learning')
+        @include('user.pages.chatboard.partials.sidebar-right-info')
     @endif
 </div>
 

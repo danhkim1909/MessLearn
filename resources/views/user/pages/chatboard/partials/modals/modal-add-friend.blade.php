@@ -8,8 +8,8 @@
                     <i data-lucide="user-plus" class="w-5 h-5"></i>
                 </div>
                 <div>
-                    <h3 class="font-bold text-base text-slate-900 dark:text-white">Ket ban bang Email</h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Tim kiem tai khoan ban be de gui loi moi</p>
+                    <h3 class="font-bold text-base text-slate-900 dark:text-white">Kết bạn bằng Email</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Tìm kiếm tài khoản bạn bè để gửi lời mời</p>
                 </div>
             </div>
             <button type="button" onclick="closeModal('modal-add-friend')" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
@@ -20,7 +20,7 @@
         <!-- Form tim kiem -->
         <div class="space-y-3">
             <div>
-                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Dia chi Email nguoi dung</label>
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Địa chỉ Email người dùng</label>
                 <div class="flex gap-2">
                     <div class="relative flex-1">
                         <i data-lucide="mail" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
@@ -31,7 +31,7 @@
                     </div>
                     <button type="button" id="btn-search-friend" onclick="searchFriendByEmail()" class="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-md shadow-sky-500/20 transition-all flex items-center gap-1.5 shrink-0">
                         <i data-lucide="search" class="w-4 h-4"></i>
-                        <span>Tim kiem</span>
+                        <span>Tìm kiếm</span>
                     </button>
                 </div>
             </div>
@@ -43,13 +43,13 @@
                     <div class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-2">
                         <i data-lucide="search" class="w-5 h-5"></i>
                     </div>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Nhap chinh xac email nguoi dung va nhan <strong>Tim kiem</strong> de xem thong tin tai khoan.</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Nhập chính xác email người dùng và nhấn <strong>Tìm kiếm</strong> để xem thông tin tài khoản.</p>
                 </div>
 
                 <!-- Trang thai Loading -->
                 <div id="add-friend-loading" class="hidden text-center py-8">
                     <div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-sky-500 border-t-transparent mb-2"></div>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Dang tim kiem nguoi dung...</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Đang tìm kiếm người dùng...</p>
                 </div>
 
                 <!-- Trang thai khong tim thay -->
@@ -57,8 +57,8 @@
                     <div class="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-500 flex items-center justify-center mx-auto mb-2">
                         <i data-lucide="user-x" class="w-5 h-5"></i>
                     </div>
-                    <p class="text-xs font-bold text-rose-600 dark:text-rose-400" id="add-friend-not-found-text">Khong tim thay nguoi dung voi email nay.</p>
-                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Vui long kiem tra lai xem ban da go dung chinh ta email chua.</p>
+                    <p class="text-xs font-bold text-rose-600 dark:text-rose-400" id="add-friend-not-found-text">Không tìm thấy người dùng với email này.</p>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Vui lòng kiểm tra lại xem bạn đã gõ đúng chính tả email chưa.</p>
                 </div>
 
                 <!-- The xem truoc nguoi dung (User Preview Card) -->
@@ -68,7 +68,7 @@
                             U
                         </div>
                         <div class="flex-1 min-w-0">
-                            <h4 id="add-friend-card-name" class="font-bold text-sm text-slate-900 dark:text-white group-hover:text-sky-500 transition-colors truncate">Ten nguoi dung</h4>
+                            <h4 id="add-friend-card-name" class="font-bold text-sm text-slate-900 dark:text-white group-hover:text-sky-500 transition-colors truncate">Tên người dùng</h4>
                             <p id="add-friend-card-email" class="text-xs text-slate-500 dark:text-slate-400 truncate">email@example.com</p>
                         </div>
                         <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400 group-hover:text-sky-500 transition-colors shrink-0 mr-1"></i>

@@ -98,6 +98,12 @@ class ConversationController extends Controller
                 fn ($id) => (int)$id !== (int)$currentUserId
             )));
 
+            // Loc bo nhung nguoi dung co quan he chan lien he voi nguoi tao nhom
+            $blockedUserIds = UserBlock::where('blocker_id', $currentUserId)->pluck('blocked_id')
+                ->merge(UserBlock::where('blocked_id', $currentUserId)->pluck('blocker_id'))
+                ->toArray();
+            $participantIds = array_values(array_diff($participantIds, $blockedUserIds));
+
             if (count($participantIds) < 2) {
                 if ($request->expectsJson()) {
                     return response()->json([
@@ -255,8 +261,14 @@ class ConversationController extends Controller
             fn ($id) => !in_array((int)$id, $existingUserIds)
         )));
 
+        // Loc bo nhung nguoi dung co quan he chan lien he
+        $blockedUserIds = UserBlock::where('blocker_id', $userId)->pluck('blocked_id')
+            ->merge(UserBlock::where('blocked_id', $userId)->pluck('blocker_id'))
+            ->toArray();
+        $newIds = array_values(array_diff($newIds, $blockedUserIds));
+
         if (empty($newIds)) {
-            return response()->json(['message' => 'Tất cả người dùng đã được chọn đều đã có trong nhóm.'], 400);
+            return response()->json(['message' => 'Không thể thêm thành viên do đã có trong nhóm hoặc có chặn liên hệ.'], 400);
         }
 
         foreach ($newIds as $newId) {
@@ -351,23 +363,42 @@ class ConversationController extends Controller
         }
 
         // Neu la admin, chuyen giao quyen admin cho thanh vien khac neu con nguoi
+        $promotedAdminName = null;
         if ($participant->role === 'admin') {
             $nextMember = $conversation->participants()
                 ->where('user_id', '!=', $userId)
+                ->with('user')
                 ->first();
             if ($nextMember) {
                 $nextMember->update(['role' => 'admin']);
+                $promotedAdminName = $nextMember->user?->name;
             }
         }
 
         $participant->delete();
 
+        // Kiem tra so thanh vien con lai trong nhom
+        $remainingCount = $conversation->participants()->count();
+        if ($remainingCount === 0) {
+            $conversation->delete();
+            return response()->json([
+                'success' => true,
+                'message' => 'Bạn đã rời nhóm. Nhóm đã tự động giải tán do không còn thành viên.',
+                'redirect_url' => route('app.chat-board'),
+            ]);
+        }
+
         // Tao tin nhan he thong
+        $sysBody = Auth::user()->name . " đã rời khỏi nhóm học tập.";
+        if ($promotedAdminName) {
+            $sysBody .= " Quyền Trưởng nhóm được chuyển giao cho {$promotedAdminName}.";
+        }
+
         $sysMsg = Message::create([
             'conversation_id' => $conversation->id,
             'user_id' => $userId,
             'type' => 'text',
-            'body' => Auth::user()->name . " đã rời khỏi nhóm học tập.",
+            'body' => $sysBody,
             'metadata' => ['is_system' => true]
         ]);
 

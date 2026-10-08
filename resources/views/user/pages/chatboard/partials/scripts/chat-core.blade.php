@@ -100,7 +100,7 @@ async function searchFriendByEmail() {
 
         if (!res.ok || !data.found) {
             if (notFoundEl) notFoundEl.classList.remove('hidden');
-            if (notFoundText) notFoundText.innerText = data.message || 'Khong tim thay nguoi dung voi email nay.';
+            if (notFoundText) notFoundText.innerText = data.message || 'Không tìm thấy người dùng với email này.';
             return;
         }
 
@@ -109,7 +109,7 @@ async function searchFriendByEmail() {
     } catch (err) {
         if (loadingEl) loadingEl.classList.add('hidden');
         if (notFoundEl) notFoundEl.classList.remove('hidden');
-        if (notFoundText) notFoundText.innerText = 'Loi ket noi den may chu, vui long thu lai.';
+        if (notFoundText) notFoundText.innerText = 'Lỗi kết nối đến máy chủ, vui lòng thử lại.';
     }
 }
 
@@ -160,11 +160,11 @@ function renderFriendResultCard(data) {
             <div class="flex gap-2">
                 <button type="button" onclick="handlePartnerSendMessageClickWithId(${user.id})" class="flex-1 py-2.5 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2">
                     <i data-lucide="message-circle" class="w-4 h-4"></i>
-                    <span>Nhan tin</span>
+                    <span>Nhắn tin</span>
                 </button>
-                <button type="button" onclick="unfriendUser(${user.id})" class="px-3 py-2.5 bg-slate-100 hover:bg-rose-500 hover:text-white dark:bg-slate-700 text-slate-500 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5" title="Huy ket ban">
+                <button type="button" onclick="unfriendUser(${user.id})" class="px-3 py-2.5 bg-slate-100 hover:bg-rose-500 hover:text-white dark:bg-slate-700 text-slate-500 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5" title="Hủy kết bạn">
                     <i data-lucide="user-minus" class="w-4 h-4"></i>
-                    <span>Huy ket ban</span>
+                    <span>Hủy kết bạn</span>
                 </button>
             </div>
         `;
@@ -172,18 +172,18 @@ function renderFriendResultCard(data) {
         badgeHtml = `
             <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60 text-xs font-semibold">
                 <i data-lucide="clock" class="w-4 h-4"></i>
-                <span>Da gui loi moi ket ban (Dang cho phan hoi)</span>
+                <span>Đã gửi lời mời kết bạn (Đang chờ phản hồi)</span>
             </div>
         `;
         actionHtml = `
             <div class="flex gap-2">
                 <button type="button" onclick="handlePartnerSendMessageClickWithId(${user.id})" class="flex-1 py-2.5 px-4 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2">
                     <i data-lucide="message-circle" class="w-4 h-4"></i>
-                    <span>Nhan tin</span>
+                    <span>Nhắn tin</span>
                 </button>
                 <button type="button" onclick="cancelFriendRequest(${rel.friendship_id})" id="btn-cancel-friend-modal" class="px-3 py-2.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5">
                     <i data-lucide="x-circle" class="w-4 h-4"></i>
-                    <span>Huy loi moi</span>
+                    <span>Hủy lời mời</span>
                 </button>
             </div>
         `;
@@ -191,7 +191,7 @@ function renderFriendResultCard(data) {
         badgeHtml = `
             <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60 text-xs font-semibold">
                 <i data-lucide="user-plus" class="w-4 h-4"></i>
-                <span>Nguoi nay da gui loi moi ket ban cho ban</span>
+                <span>Người này đã gửi lời mời kết bạn cho bạn</span>
             </div>
         `;
         actionHtml = `
@@ -199,16 +199,16 @@ function renderFriendResultCard(data) {
                 <div class="flex gap-2">
                     <button type="button" onclick="acceptFriendFromModal(${rel.friendship_id})" id="btn-accept-friend-modal" class="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2">
                         <i data-lucide="check" class="w-4 h-4"></i>
-                        <span>Chap nhan</span>
+                        <span>Chấp nhận</span>
                     </button>
                     <button type="button" onclick="rejectFriendFromModal(${rel.friendship_id})" class="px-4 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5">
                         <i data-lucide="x" class="w-4 h-4"></i>
-                        <span>Tu choi</span>
+                        <span>Từ chối</span>
                     </button>
                 </div>
                 <button type="button" onclick="handlePartnerSendMessageClickWithId(${user.id})" class="w-full py-2 px-3 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5">
                     <i data-lucide="message-circle" class="w-4 h-4"></i>
-                    <span>Nhan tin truc tiep</span>
+                    <span>Nhắn tin trực tiếp</span>
                 </button>
             </div>
         `;
@@ -216,7 +216,7 @@ function renderFriendResultCard(data) {
         badgeHtml = `
             <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/60 text-xs font-semibold">
                 <i data-lucide="ban" class="w-4 h-4"></i>
-                <span>Khong the lien he voi nguoi dung nay</span>
+                <span>Không thể liên hệ với người dùng này</span>
             </div>
         `;
         actionHtml = '';
@@ -224,18 +224,18 @@ function renderFriendResultCard(data) {
         badgeHtml = `
             <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800/60 text-xs font-semibold">
                 <i data-lucide="user" class="w-4 h-4"></i>
-                <span>Chua ket ban</span>
+                <span>Chưa kết bạn</span>
             </div>
         `;
         actionHtml = `
             <div class="flex gap-2">
                 <button type="button" onclick="handlePartnerSendMessageClickWithId(${user.id})" class="flex-1 py-2.5 px-4 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2">
                     <i data-lucide="message-circle" class="w-4 h-4"></i>
-                    <span>Nhan tin</span>
+                    <span>Nhắn tin</span>
                 </button>
                 <button type="button" onclick="submitFriendRequest(${user.id})" id="btn-send-friend-modal" class="flex-1 py-2.5 px-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold text-xs shadow-md shadow-sky-500/20 transition-all flex items-center justify-center gap-2">
                     <i data-lucide="user-plus" class="w-4 h-4"></i>
-                    <span id="btn-send-friend-text">Ket ban</span>
+                    <span id="btn-send-friend-text">Kết bạn</span>
                 </button>
             </div>
         `;
@@ -1740,7 +1740,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div>
                             ${!isMine ? `
                                 <div class="flex items-baseline gap-2 mb-1 ml-1">
-                                    <span class="text-xs font-bold text-slate-700 dark:text-slate-300">${message.user ? message.user.name : ''}</span>
+                                    <span class="text-xs font-bold text-slate-700 dark:text-slate-300">${escapeHtmlText(message.user ? message.user.name : '')}</span>
                                     <span class="text-[10px] text-slate-400">${timeStr}</span>
                                 </div>
                             ` : `
@@ -1757,6 +1757,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
         }
+
+        const rawUserName = (message.user && message.user.name) ? message.user.name : '';
+        const safeUserName = escapeHtmlText(rawUserName);
 
         let innerContent = '';
         if (message.reply_to) {
@@ -1776,10 +1779,12 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (message.reply_to.type === 'document') {
                 replyText = '[Tài liệu]: ' + ((message.reply_to.metadata && message.reply_to.metadata.file_name) || message.reply_to.body || '');
             }
+            const safeReplyUserName = escapeHtmlText(message.reply_to.user ? message.reply_to.user.name : '');
+            const safeReplyText = escapeHtmlText(replyText || '');
             innerContent += `
                 <div onclick="scrollToMessage(${message.reply_to_id})" class="cursor-pointer hover:opacity-100 transition-all mb-2 p-2 rounded-xl ${isMine ? 'bg-black/10' : 'bg-black/5 dark:bg-white/5'} border-l-2 ${isMine ? 'border-white/50' : 'border-sky-500'} text-[11px] opacity-80">
-                    <div class="font-bold mb-0.5">${message.reply_to.user ? message.reply_to.user.name : ''}</div>
-                    <div class="truncate">${replyText || ''}</div>
+                    <div class="font-bold mb-0.5">${safeReplyUserName}</div>
+                    <div class="truncate">${safeReplyText}</div>
                 </div>
             `;
         }
@@ -1791,7 +1796,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <i data-lucide="help-circle" class="w-4 h-4"></i>
                         Bài kiểm tra
                     </div>
-                    <p class="font-medium text-sm">${message.body}</p>
+                    <p class="font-medium text-sm">${escapeHtmlText(message.body || '')}</p>
                     <div class="flex gap-2 mt-2">
                         <button type="button" onclick="openQuizRunner(${message.quiz_id || 0})" class="flex-1 text-center py-1.5 px-3 rounded-lg font-bold text-[11px] transition-all ${isMine ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-sky-500 hover:bg-sky-600 text-white'}">
                             Bắt đầu làm bài
@@ -1823,7 +1828,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
             if (message.body) {
-                innerContent += `<p class="mt-1.5 text-xs">${(message.body || '').replace(/\n/g, "<br>")}</p>`;
+                innerContent += `<p class="mt-1.5 text-xs">${escapeHtmlText(message.body || '').replace(/\n/g, "<br>")}</p>`;
             }
         } else if (message.type === 'image') {
             const imgSrc = message.file_url || (message.file_path ? `/storage/${message.file_path}` : '');
@@ -1840,7 +1845,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </button>
                         </div>
                     </div>
-                    ${message.body ? `<p class="text-xs pt-1">${(message.body || '').replace(/\n/g, "<br>")}</p>` : ''}
+                    ${message.body ? `<p class="text-xs pt-1">${escapeHtmlText(message.body || '').replace(/\n/g, "<br>")}</p>` : ''}
                 </div>
             `;
         } else if (message.type === 'game_dice') {
@@ -1851,7 +1856,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <i data-lucide="box" class="w-4 h-4 text-indigo-400"></i>
                         <span>Tung xúc xắc</span>
                     </div>
-                    ${message.body ? `<p class="text-xs italic opacity-90">"${message.body}"</p>` : ''}
+                    ${message.body ? `<p class="text-xs italic opacity-90">"${escapeHtmlText(message.body)}"</p>` : ''}
                     <div class="flex items-center gap-3 py-1">
                         <div class="w-12 h-12 rounded-2xl ${isMine ? 'bg-white text-indigo-600' : 'bg-indigo-500 text-white'} flex items-center justify-center font-black text-2xl shadow-md shrink-0">
                             ${diceNum}
@@ -1870,7 +1875,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (message.type === 'document') {
             innerContent += renderDocumentCardHtml(message, isMine);
         } else {
-            innerContent += (message.body || '').replace(/\n/g, "<br>");
+            innerContent += escapeHtmlText(message.body || '').replace(/\n/g, "<br>");
         }
 
         let replyTooltip = message.body || '';
@@ -1891,7 +1896,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         return `
-            <div id="msg-${message.id}" class="flex ${isMine ? 'justify-end' : 'justify-start'}">
+            <div id="msg-${message.id}" class="flex ${isMine ? 'justify-end' : 'justify-start'}" data-raw-body="${escapeHtmlText(message.body || '')}">
                 <div class="flex gap-2 max-w-[75%] ${isMine ? 'flex-row-reverse' : 'flex-row'}">
                     ${!isMine ? `
                         <div class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 shrink-0 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 mt-1">
@@ -1901,7 +1906,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div>
                         ${!isMine ? `
                             <div class="flex items-baseline gap-2 mb-1 ml-1">
-                                <span class="text-xs font-bold text-slate-700 dark:text-slate-300">${message.user ? message.user.name : ''}</span>
+                                <span class="text-xs font-bold text-slate-700 dark:text-slate-300">${safeUserName}</span>
                                 <span class="text-[10px] text-slate-400">${timeStr}</span>
                             </div>
                         ` : `
@@ -1916,12 +1921,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         `}
                         <div class="${isMine ? 'bg-sky-500 text-white rounded-tr-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-sm'} px-4 py-2.5 rounded-2xl text-xs max-w-md relative group">
 
-                            <div class="absolute ${isMine ? 'right-full mr-2' : 'left-full ml-2'} top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                            <!-- Discord-style Floating Action Toolbar -->
+                            <div class="absolute -top-3.5 ${isMine ? 'right-2' : 'left-2'} flex items-center bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl shadow-xs px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                <!-- 1. Nut Tha cam xuc nhanh -->
                                 <div class="relative reaction-picker-wrap">
-                                    <button type="button" onclick="toggleReactionMenu(${message.id})" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-500 shadow-sm flex items-center justify-center transition-colors" title="Thả cảm xúc">
-                                        <i data-lucide="smile" class="w-3.5 h-3.5"></i>
+                                    <button type="button" onclick="toggleReactionMenu(${message.id})" class="p-1 text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg flex items-center justify-center transition-colors" title="Thả cảm xúc">
+                                        <i data-lucide="smile" class="w-4 h-4"></i>
                                     </button>
-                                    <div id="reaction-menu-${message.id}" class="hidden reaction-popup absolute ${isMine ? 'right-0' : 'left-0'} bottom-full mb-1 p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-lg items-center gap-1 z-30">
+                                    <div id="reaction-menu-${message.id}" class="hidden reaction-popup absolute ${isMine ? 'right-0' : 'left-0'} bottom-full mb-1.5 p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-lg items-center gap-0.5 z-30">
                                         <button type="button" onclick="toggleMessageReaction(${message.id}, 'like')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-sky-500 hover:scale-125 transition-transform" title="Thích">
                                             <i data-lucide="thumbs-up" class="w-4 h-4"></i>
                                         </button>
@@ -1942,20 +1949,39 @@ document.addEventListener('DOMContentLoaded', () => {
                                         </button>
                                     </div>
                                 </div>
-                                <button type="button" onclick="prepareReply(${message.id}, '${(message.user ? message.user.name : '').replace(/'/g, '\\\'')}', '${replyTooltip.replace(/'/g, '\\\'').replace(/\r\n|\n|\r/g, ' ').substring(0, 50)}')" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm flex items-center justify-center transition-colors" title="Trả lời">
-                                    <i data-lucide="reply" class="w-3.5 h-3.5"></i>
+
+                                <!-- 2. Nut Tra loi -->
+                                <button type="button" onclick="prepareReply(${message.id}, '${(message.user ? message.user.name : '').replace(/'/g, '\\\'')}', '${replyTooltip.replace(/'/g, '\\\'').replace(/\r\n|\n|\r/g, ' ').substring(0, 50)}')" class="p-1 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg flex items-center justify-center transition-colors" title="Trả lời">
+                                    <i data-lucide="reply" class="w-4 h-4"></i>
                                 </button>
-                                <button type="button" onclick="openForwardModal(${message.id})" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-indigo-500 shadow-sm flex items-center justify-center transition-colors" title="Chuyển tiếp">
-                                    <i data-lucide="forward" class="w-3.5 h-3.5"></i>
-                                </button>
-                                <button type="button" onclick="togglePinMessage(${message.id})" id="btn-pin-${message.id}" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-500 shadow-sm flex items-center justify-center transition-colors" title="${message.is_pinned ? 'Bỏ ghim' : 'Ghim tin nhắn'}">
-                                    <i data-lucide="pin" class="w-3.5 h-3.5 ${message.is_pinned ? 'text-amber-500 fill-amber-500' : ''}"></i>
-                                </button>
-                                ${isMine ? `
-                                    <button type="button" onclick="confirmUnsendMessage(${message.id})" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-500 shadow-sm flex items-center justify-center transition-colors" title="Gỡ tin nhắn">
-                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+
+                                <!-- 3. Nut Them (3 cham) & Dropdown Context Menu -->
+                                <div class="relative more-menu-wrap">
+                                    <button type="button" onclick="toggleMoreMenu(${message.id})" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg flex items-center justify-center transition-colors" title="Thêm">
+                                        <i data-lucide="more-horizontal" class="w-4 h-4"></i>
                                     </button>
-                                ` : ''}
+                                    <div id="more-menu-${message.id}" class="hidden more-menu-popup absolute ${isMine ? 'right-0' : 'left-0'} top-full mt-1 w-44 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl py-1.5 z-30 text-xs">
+                                        <button type="button" onclick="copyMessageText(${message.id})" class="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-2 transition-colors">
+                                            <i data-lucide="copy" class="w-3.5 h-3.5 text-slate-400"></i>
+                                            <span>Sao chép nội dung</span>
+                                        </button>
+                                        <button type="button" onclick="togglePinMessage(${message.id})" id="btn-pin-${message.id}" class="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-2 transition-colors" title="${message.is_pinned ? 'Bỏ ghim' : 'Ghim tin nhắn'}">
+                                            <i data-lucide="pin" class="w-3.5 h-3.5 ${message.is_pinned ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}"></i>
+                                            <span class="btn-pin-text">${message.is_pinned ? 'Bỏ ghim tin nhắn' : 'Ghim tin nhắn'}</span>
+                                        </button>
+                                        <button type="button" onclick="openForwardModal(${message.id})" class="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-2 transition-colors">
+                                            <i data-lucide="forward" class="w-3.5 h-3.5 text-slate-400"></i>
+                                            <span>Chuyển tiếp</span>
+                                        </button>
+                                        ${isMine ? `
+                                            <div class="border-t border-slate-100 dark:border-slate-700/60 my-1"></div>
+                                            <button type="button" onclick="confirmUnsendMessage(${message.id})" class="w-full text-left px-3 py-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-500 dark:text-rose-400 flex items-center gap-2 transition-colors">
+                                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                                <span>Gỡ tin nhắn</span>
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                </div>
                             </div>
                             <!-- Huy hieu Da ghim -->
                             <div id="pin-badge-${message.id}" class="${message.is_pinned ? 'flex' : 'hidden'} items-center gap-1 text-[10px] ${isMine ? 'text-amber-200' : 'text-amber-500 dark:text-amber-400'} font-bold mb-1.5 pb-1 border-b ${isMine ? 'border-white/20' : 'border-slate-200/60 dark:border-slate-700/60'}">
@@ -3479,9 +3505,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (icon) {
                 if (message.is_pinned) {
                     icon.classList.add('text-amber-500', 'fill-amber-500');
+                    icon.classList.remove('text-slate-400');
                 } else {
                     icon.classList.remove('text-amber-500', 'fill-amber-500');
+                    icon.classList.add('text-slate-400');
                 }
+            }
+            const textEl = btn.querySelector('.btn-pin-text');
+            if (textEl) {
+                textEl.innerText = message.is_pinned ? 'Bỏ ghim tin nhắn' : 'Ghim tin nhắn';
             }
         }
 
@@ -3504,7 +3536,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (el.id !== `btn-pin-${message.id}`) {
                     el.title = 'Ghim tin nhắn';
                     const icon = el.querySelector('svg') || el.querySelector('i');
-                    if (icon) icon.classList.remove('text-amber-500', 'fill-amber-500');
+                    if (icon) {
+                        icon.classList.remove('text-amber-500', 'fill-amber-500');
+                        icon.classList.add('text-slate-400');
+                    }
+                    const textEl = el.querySelector('.btn-pin-text');
+                    if (textEl) {
+                        textEl.innerText = 'Ghim tin nhắn';
+                    }
                 }
             });
 
@@ -3534,6 +3573,60 @@ document.addEventListener('DOMContentLoaded', () => {
 
         lucide.createIcons();
     }
+
+    // Menu tuy chon tin nhan (Discord style)
+    function toggleMoreMenu(messageId) {
+        const targetMenu = document.getElementById('more-menu-' + messageId);
+        if (!targetMenu) return;
+
+        document.querySelectorAll('.more-menu-popup').forEach(el => {
+            if (el !== targetMenu) el.classList.add('hidden');
+        });
+        document.querySelectorAll('.reaction-popup').forEach(el => {
+            el.classList.add('hidden');
+            el.classList.remove('flex');
+        });
+
+        targetMenu.classList.toggle('hidden');
+    }
+
+    async function copyMessageText(messageId) {
+        const targetMenu = document.getElementById('more-menu-' + messageId);
+        if (targetMenu) targetMenu.classList.add('hidden');
+
+        const msgEl = document.getElementById('msg-' + messageId);
+        if (!msgEl) return;
+
+        const bodyAttr = msgEl.getAttribute('data-raw-body');
+        const textToCopy = (bodyAttr !== null && bodyAttr !== '') ? bodyAttr : (msgEl.querySelector('p')?.innerText || '');
+
+        if (!textToCopy) {
+            Toastify({
+                text: "Không có nội dung văn bản để sao chép",
+                duration: 2000,
+                style: { background: "#64748b" }
+            }).showToast();
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(textToCopy);
+            Toastify({
+                text: "Đã sao chép nội dung tin nhắn",
+                duration: 2000,
+                style: { background: "#0ea5e9" }
+            }).showToast();
+        } catch (err) {
+            Toastify({
+                text: "Không thể sao chép văn bản",
+                duration: 2000,
+                style: { background: "#f43f5e" }
+            }).showToast();
+        }
+    }
+
+    window.toggleMoreMenu = toggleMoreMenu;
+    window.copyMessageText = copyMessageText;
 
     // ===== CHUC NANG CHUYEN TIEP & GO TIN NHAN =====
     let currentForwardMessageId = null;
@@ -3850,12 +3943,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (pinBtn) {
                     pinBtn.title = isPinned ? 'Bỏ ghim cuộc trò chuyện' : 'Ghim cuộc trò chuyện lên đầu';
+                    const iconBox = pinBtn.querySelector('.w-8.h-8');
+                    const icon = pinBtn.querySelector('i[data-lucide="pin"]') || pinBtn.querySelector('svg');
                     if (isPinned) {
-                        pinBtn.className = 'p-2 text-amber-500 bg-amber-50 dark:bg-amber-950/30 rounded-xl transition-all';
-                        pinBtn.innerHTML = '<i data-lucide="pin" class="w-5 h-5 fill-amber-500"></i>';
+                        if (iconBox) iconBox.className = 'w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/30 text-amber-500 flex items-center justify-center mb-1 group-hover:scale-105 transition-transform';
+                        if (icon) icon.className = 'w-4 h-4 fill-amber-500 text-amber-500';
                     } else {
-                        pinBtn.className = 'p-2 text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all';
-                        pinBtn.innerHTML = '<i data-lucide="pin" class="w-5 h-5"></i>';
+                        if (iconBox) iconBox.className = 'w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 flex items-center justify-center mb-1 group-hover:scale-105 transition-transform';
+                        if (icon) icon.className = 'w-4 h-4';
                     }
                 }
 
@@ -3878,6 +3973,16 @@ document.addEventListener('DOMContentLoaded', () => {
             Toastify({ text: "Lỗi kết nối", style: { background: "#f43f5e" } }).showToast();
         }
     }
+
+    function toggleRightSidebar() {
+        const sidebar = document.getElementById('sidebar-right-info');
+        if (!sidebar) return;
+        sidebar.classList.toggle('hidden');
+        if (!sidebar.classList.contains('hidden') && typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+    window.toggleRightSidebar = toggleRightSidebar;
 
     function updateSidebarPinIcon(convId, isPinned) {
         const sidebarLink = document.querySelector(`a[href*="/app/chat-board/${convId}"]`);
@@ -3943,14 +4048,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (muteBtn) {
+                    muteBtn.title = isCurrentConversationMuted ? 'Đang tắt thông báo (Nhấn để tùy chỉnh)' : 'Tắt thông báo';
+                    const iconBox = muteBtn.querySelector('.w-8.h-8');
                     if (isCurrentConversationMuted) {
-                        muteBtn.className = 'p-2 text-rose-500 bg-rose-50 dark:bg-rose-950/30 rounded-xl transition-all';
-                        muteBtn.title = 'Đang tắt thông báo (Nhấn để tùy chỉnh)';
-                        muteBtn.innerHTML = '<i data-lucide="bell-off" class="w-5 h-5"></i>';
+                        if (iconBox) {
+                            iconBox.className = 'w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/30 text-rose-500 flex items-center justify-center mb-1 group-hover:scale-105 transition-transform';
+                            iconBox.innerHTML = '<i data-lucide="bell-off" class="w-4 h-4"></i>';
+                        }
                     } else {
-                        muteBtn.className = 'p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all';
-                        muteBtn.title = 'Tắt thông báo cuộc trò chuyện';
-                        muteBtn.innerHTML = '<i data-lucide="bell" class="w-5 h-5"></i>';
+                        if (iconBox) {
+                            iconBox.className = 'w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 flex items-center justify-center mb-1 group-hover:scale-105 transition-transform';
+                            iconBox.innerHTML = '<i data-lucide="bell" class="w-4 h-4"></i>';
+                        }
                     }
                 }
 
@@ -4276,6 +4385,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.querySelectorAll('.reaction-popup').forEach(el => {
                     el.classList.add('hidden');
                     el.classList.remove('flex');
+                });
+            }
+            if (!e.target.closest('.more-menu-wrap')) {
+                document.querySelectorAll('.more-menu-popup').forEach(el => {
+                    el.classList.add('hidden');
                 });
             }
             if (!e.target.closest('#chat-search-panel') && !e.target.closest('button[onclick*="toggleChatSearch"]')) {

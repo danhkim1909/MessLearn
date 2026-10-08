@@ -2,7 +2,7 @@
     $isMine = $message->user_id === Auth::id();
     $isRecalled = $message->type === 'recalled';
 @endphp
-<div id="msg-{{ $message->id }}" class="flex {{ $isMine ? 'justify-end' : 'justify-start' }}">
+<div id="msg-{{ $message->id }}" class="flex {{ $isMine ? 'justify-end' : 'justify-start' }}" data-raw-body="{{ e($message->body ?? '') }}">
     <div class="flex gap-2 max-w-[75%] {{ $isMine ? 'flex-row-reverse' : 'flex-row' }}">
         @if(!$isMine)
             <div class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 shrink-0 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 mt-1 overflow-hidden">
@@ -64,12 +64,14 @@
                 @php
                     $replyPreview = $message->type === 'quiz' ? 'Bài kiểm tra: ' . $message->body : ($message->type === 'audio' ? '[Tin nhắn thoại]' : ($message->type === 'image' ? '[Hình ảnh]' : ($message->type === 'game_dice' ? '[Tung xúc xắc]' : ($message->type === 'game_rps' ? '[Oẳn tù tì]' : ($message->type === 'event' ? '[Lịch hẹn]: ' . $message->body : $message->body)))));
                 @endphp
-                <div class="absolute {{ $isMine ? 'right-full mr-2' : 'left-full ml-2' }} top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                <!-- Discord-style Floating Action Toolbar -->
+                <div class="absolute -top-3.5 {{ $isMine ? 'right-2' : 'left-2' }} flex items-center bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl shadow-xs px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                    <!-- 1. Nut Tha cam xuc nhanh -->
                     <div class="relative reaction-picker-wrap">
-                        <button type="button" onclick="toggleReactionMenu({{ $message->id }})" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-500 shadow-sm flex items-center justify-center transition-colors" title="Thả cảm xúc">
-                            <i data-lucide="smile" class="w-3.5 h-3.5"></i>
+                        <button type="button" onclick="toggleReactionMenu({{ $message->id }})" class="p-1 text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg flex items-center justify-center transition-colors" title="Thả cảm xúc">
+                            <i data-lucide="smile" class="w-4 h-4"></i>
                         </button>
-                        <div id="reaction-menu-{{ $message->id }}" class="hidden reaction-popup absolute {{ $isMine ? 'right-0' : 'left-0' }} bottom-full mb-1 p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-lg items-center gap-1 z-30">
+                        <div id="reaction-menu-{{ $message->id }}" class="hidden reaction-popup absolute {{ $isMine ? 'right-0' : 'left-0' }} bottom-full mb-1.5 p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-lg items-center gap-0.5 z-30">
                             <button type="button" onclick="toggleMessageReaction({{ $message->id }}, 'like')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-sky-500 hover:scale-125 transition-transform" title="Thích">
                                 <i data-lucide="thumbs-up" class="w-4 h-4"></i>
                             </button>
@@ -90,20 +92,39 @@
                             </button>
                         </div>
                     </div>
-                    <button type="button" onclick="prepareReply({{ $message->id }}, '{{ addslashes($message->user->name) }}', '{{ addslashes(str_replace(["\r", "\n"], ' ', \Illuminate\Support\Str::limit($replyPreview, 50))) }}')" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-sky-500 shadow-sm flex items-center justify-center transition-colors" title="Trả lời">
-                        <i data-lucide="reply" class="w-3.5 h-3.5"></i>
+
+                    <!-- 2. Nut Tra loi -->
+                    <button type="button" onclick="prepareReply({{ $message->id }}, '{{ addslashes($message->user->name) }}', '{{ addslashes(str_replace(["\r", "\n"], ' ', \Illuminate\Support\Str::limit($replyPreview, 50))) }}')" class="p-1 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg flex items-center justify-center transition-colors" title="Trả lời">
+                        <i data-lucide="reply" class="w-4 h-4"></i>
                     </button>
-                    <button type="button" onclick="openForwardModal({{ $message->id }})" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-indigo-500 shadow-sm flex items-center justify-center transition-colors" title="Chuyển tiếp">
-                        <i data-lucide="forward" class="w-3.5 h-3.5"></i>
-                    </button>
-                    <button type="button" onclick="togglePinMessage({{ $message->id }})" id="btn-pin-{{ $message->id }}" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-500 shadow-sm flex items-center justify-center transition-colors" title="{{ $message->is_pinned ? 'Bỏ ghim' : 'Ghim tin nhắn' }}">
-                        <i data-lucide="pin" class="w-3.5 h-3.5 {{ $message->is_pinned ? 'text-amber-500 fill-amber-500' : '' }}"></i>
-                    </button>
-                    @if($isMine)
-                        <button type="button" onclick="confirmUnsendMessage({{ $message->id }})" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-500 shadow-sm flex items-center justify-center transition-colors" title="Gỡ tin nhắn">
-                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+
+                    <!-- 3. Nut Them (3 cham) & Dropdown Context Menu -->
+                    <div class="relative more-menu-wrap">
+                        <button type="button" onclick="toggleMoreMenu({{ $message->id }})" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg flex items-center justify-center transition-colors" title="Thêm">
+                            <i data-lucide="more-horizontal" class="w-4 h-4"></i>
                         </button>
-                    @endif
+                        <div id="more-menu-{{ $message->id }}" class="hidden more-menu-popup absolute {{ $isMine ? 'right-0' : 'left-0' }} top-full mt-1 w-44 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl py-1.5 z-30 text-xs">
+                            <button type="button" onclick="copyMessageText({{ $message->id }})" class="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-2 transition-colors">
+                                <i data-lucide="copy" class="w-3.5 h-3.5 text-slate-400"></i>
+                                <span>Sao chép nội dung</span>
+                            </button>
+                            <button type="button" onclick="togglePinMessage({{ $message->id }})" id="btn-pin-{{ $message->id }}" class="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-2 transition-colors" title="{{ $message->is_pinned ? 'Bỏ ghim' : 'Ghim tin nhắn' }}">
+                                <i data-lucide="pin" class="w-3.5 h-3.5 {{ $message->is_pinned ? 'text-amber-500 fill-amber-500' : 'text-slate-400' }}"></i>
+                                <span class="btn-pin-text">{{ $message->is_pinned ? 'Bỏ ghim tin nhắn' : 'Ghim tin nhắn' }}</span>
+                            </button>
+                            <button type="button" onclick="openForwardModal({{ $message->id }})" class="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-2 transition-colors">
+                                <i data-lucide="forward" class="w-3.5 h-3.5 text-slate-400"></i>
+                                <span>Chuyển tiếp</span>
+                            </button>
+                            @if($isMine)
+                                <div class="border-t border-slate-100 dark:border-slate-700/60 my-1"></div>
+                                <button type="button" onclick="confirmUnsendMessage({{ $message->id }})" class="w-full text-left px-3 py-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-500 dark:text-rose-400 flex items-center gap-2 transition-colors">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    <span>Gỡ tin nhắn</span>
+                                </button>
+                            @endif
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Huy hieu Da ghim -->

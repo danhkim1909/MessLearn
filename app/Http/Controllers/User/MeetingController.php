@@ -66,6 +66,10 @@ class MeetingController extends Controller
             ->first();
 
         if ($activeMeeting) {
+            if ($activeMeeting->status === 'ringing') {
+                $activeMeeting->update(['status' => 'ongoing']);
+            }
+
             $participant = MeetingParticipant::firstOrCreate(
                 ['meeting_id' => $activeMeeting->id, 'user_id' => $userId],
                 ['status' => 'joined', 'joined_at' => now()]
@@ -252,23 +256,34 @@ class MeetingController extends Controller
 
         if ($roomCode) {
             $meeting = Meeting::where('room_code', $roomCode)->first();
-            if ($meeting && !$conversation->is_group) {
-                $meeting->update([
-                    'status' => 'ended',
-                    'ended_at' => now(),
-                ]);
+            if ($meeting) {
+                if (!$conversation->is_group) {
+                    $meeting->update([
+                        'status' => 'ended',
+                        'ended_at' => now(),
+                    ]);
 
-                // Ghi nhat ky cuoc goi nho
-                Message::create([
-                    'conversation_id' => $conversation->id,
-                    'user_id' => $meeting->host_id,
-                    'type' => 'text',
-                    'body' => 'Cuộc gọi nhỡ',
-                    'metadata' => [
-                        'call_status' => 'missed',
-                        'type' => $meeting->type,
-                    ],
-                ]);
+                    // Ghi nhat ky cuoc goi nho
+                    $missedMsg = Message::create([
+                        'conversation_id' => $conversation->id,
+                        'user_id' => $meeting->host_id,
+                        'type' => 'text',
+                        'body' => 'Cuộc gọi nhỡ',
+                        'metadata' => [
+                            'call_status' => 'missed',
+                            'type' => $meeting->type,
+                        ],
+                    ]);
+                    $missedMsg->load('user:id,name,avatar');
+                    $conversation->touch();
+                    broadcast(new \App\Events\MessageSent($missedMsg))->toOthers();
+                } else {
+                    // Cuoc goi nhom: Cap nhat trang thai thanh vien nay da tu choi cuoc goi
+                    MeetingParticipant::updateOrCreate(
+                        ['meeting_id' => $meeting->id, 'user_id' => $userId],
+                        ['status' => 'rejected', 'left_at' => now()]
+                    );
+                }
             }
         }
 
@@ -287,6 +302,11 @@ class MeetingController extends Controller
             targetUserId: $targetUserId,
             roomCode: $roomCode,
             callType: $request->input('call_type', 'video'),
+            payload: [
+                'is_group' => (bool)$conversation->is_group,
+                'rejected_user_id' => $userId,
+                'rejected_user_name' => Auth::user()->name,
+            ],
             targetUserIds: $targetUserIds
         ))->toOthers();
 
@@ -328,7 +348,7 @@ class MeetingController extends Controller
                             ? 'Phòng học nhóm' 
                             : ($meeting->type === 'voice' ? 'Cuộc gọi thoại' : 'Cuộc gọi video');
 
-                        Message::create([
+                        $endMsg = Message::create([
                             'conversation_id' => $conversation->id,
                             'user_id' => $meeting->host_id,
                             'type' => 'text',
@@ -341,6 +361,9 @@ class MeetingController extends Controller
                                 'is_group' => (bool)$conversation->is_group,
                             ],
                         ]);
+                        $endMsg->load('user:id,name,avatar');
+                        $conversation->touch();
+                        broadcast(new \App\Events\MessageSent($endMsg))->toOthers();
                         $isMeetingEnded = true;
                     }
                 } else {

@@ -179,6 +179,9 @@ function toggleReactionMenu(messageId) {
                     el.classList.remove('flex');
                 }
             });
+            document.querySelectorAll('.more-menu-popup').forEach(el => {
+                el.classList.add('hidden');
+            });
 
             targetMenu.classList.toggle('hidden');
             targetMenu.classList.toggle('flex');
