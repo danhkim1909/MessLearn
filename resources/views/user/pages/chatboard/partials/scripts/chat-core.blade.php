@@ -157,14 +157,20 @@ function renderFriendResultCard(data) {
             </div>
         `;
         const directConvId = rel.conversation_id;
-        if (directConvId) {
-            actionHtml = `
-                <a href="/app/c/${directConvId}" class="w-full py-2.5 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2">
-                    <i data-lucide="message-circle" class="w-4 h-4"></i>
-                    <span>Nhan tin ngay</span>
-                </a>
-            `;
-        }
+        actionHtml = `
+            <div class="flex gap-2">
+                ${directConvId ? `
+                    <a href="/app/c/${directConvId}" class="flex-1 py-2.5 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="message-circle" class="w-4 h-4"></i>
+                        <span>Nhan tin ngay</span>
+                    </a>
+                ` : ''}
+                <button type="button" onclick="unfriendUser(${user.id})" class="px-3 py-2.5 bg-slate-100 hover:bg-rose-500 hover:text-white dark:bg-slate-700 text-slate-500 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5" title="Huy ket ban">
+                    <i data-lucide="user-minus" class="w-4 h-4"></i>
+                    <span>Huy ket ban</span>
+                </button>
+            </div>
+        `;
     } else if (rel.status === 'pending_sent') {
         badgeHtml = `
             <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60 text-xs font-semibold">
@@ -173,9 +179,9 @@ function renderFriendResultCard(data) {
             </div>
         `;
         actionHtml = `
-            <button type="button" disabled class="w-full py-2.5 px-4 bg-slate-100 dark:bg-slate-700 text-slate-400 rounded-xl font-bold text-xs cursor-not-allowed flex items-center justify-center gap-2">
-                <i data-lucide="clock" class="w-4 h-4"></i>
-                <span>Cho doi phuong dong y</span>
+            <button type="button" onclick="cancelFriendRequest(${rel.friendship_id})" id="btn-cancel-friend-modal" class="w-full py-2.5 px-4 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2">
+                <i data-lucide="x-circle" class="w-4 h-4"></i>
+                <span>Huy loi moi ket ban</span>
             </button>
         `;
     } else if (rel.status === 'pending_received') {
@@ -186,10 +192,16 @@ function renderFriendResultCard(data) {
             </div>
         `;
         actionHtml = `
-            <button type="button" onclick="acceptFriendFromModal(${rel.friendship_id})" id="btn-accept-friend-modal" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2">
-                <i data-lucide="check" class="w-4 h-4"></i>
-                <span>Chap nhan loi moi</span>
-            </button>
+            <div class="flex gap-2">
+                <button type="button" onclick="acceptFriendFromModal(${rel.friendship_id})" id="btn-accept-friend-modal" class="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="check" class="w-4 h-4"></i>
+                    <span>Chap nhan</span>
+                </button>
+                <button type="button" onclick="rejectFriendFromModal(${rel.friendship_id})" class="px-4 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                    <span>Tu choi</span>
+                </button>
+            </div>
         `;
     } else if (rel.status === 'blocked') {
         badgeHtml = `
@@ -313,6 +325,169 @@ async function acceptFriendFromModal(friendshipId) {
     } catch (err) {
         alert('Loi ket noi khi chap nhan loi moi.');
         if (btn) btn.disabled = false;
+    }
+}
+
+async function cancelFriendRequest(friendshipId) {
+    if (!confirm('Bạn có chắc muốn hủy lời mời kết bạn này?')) return;
+    try {
+        const res = await fetch(`/app/friend/cancel/${friendshipId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: 'Đã hủy lời mời kết bạn.', style: { background: '#64748b' } }).showToast();
+            }
+            if (currentSearchedUser) {
+                currentSearchedUser.relationship.status = 'none';
+                currentSearchedUser.relationship.friendship_id = null;
+                renderFriendResultCard(currentSearchedUser);
+            }
+        } else {
+            alert(data.message || 'Không thể hủy lời mời.');
+        }
+    } catch (e) {
+        alert('Lỗi kết nối khi hủy lời mời.');
+    }
+}
+
+async function rejectFriendFromModal(friendshipId) {
+    if (!confirm('Bạn có chắc muốn từ chối lời mời kết bạn này?')) return;
+    try {
+        const res = await fetch(`/app/friend/reject/${friendshipId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: 'Đã từ chối lời mời kết bạn.', style: { background: '#64748b' } }).showToast();
+            }
+            if (currentSearchedUser) {
+                currentSearchedUser.relationship.status = 'none';
+                currentSearchedUser.relationship.friendship_id = null;
+                renderFriendResultCard(currentSearchedUser);
+            }
+            const item = document.getElementById(`pending-request-item-${friendshipId}`);
+            if (item) item.remove();
+            updateSidebarPendingCount(-1);
+        } else {
+            alert(data.message || 'Không thể từ chối lời mời.');
+        }
+    } catch (e) {
+        alert('Lỗi kết nối khi từ chối lời mời.');
+    }
+}
+
+async function unfriendUser(friendId) {
+    if (!confirm('Bạn có chắc muốn hủy kết bạn với người này?')) return;
+    try {
+        const res = await fetch(`/app/friend/unfriend/${friendId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: 'Đã hủy kết bạn thành công.', style: { background: '#64748b' } }).showToast();
+            }
+            if (currentSearchedUser) {
+                currentSearchedUser.relationship.status = 'none';
+                currentSearchedUser.relationship.friendship_id = null;
+                renderFriendResultCard(currentSearchedUser);
+            }
+        } else {
+            alert(data.message || 'Không thể hủy kết bạn.');
+        }
+    } catch (e) {
+        alert('Lỗi kết nối khi hủy kết bạn.');
+    }
+}
+
+async function acceptFriendFromSidebar(friendshipId) {
+    try {
+        const res = await fetch(`/app/friend/accept/${friendshipId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: 'Đã đồng ý kết bạn!', style: { background: '#10b981' } }).showToast();
+            }
+            const item = document.getElementById(`pending-request-item-${friendshipId}`);
+            if (item) item.remove();
+            updateSidebarPendingCount(-1);
+            if (data.redirect_url) {
+                window.location.href = data.redirect_url;
+            }
+        } else {
+            alert(data.message || 'Không thể chấp nhận lời mời.');
+        }
+    } catch (e) {
+        alert('Lỗi kết nối.');
+    }
+}
+
+async function rejectFriendFromSidebar(friendshipId) {
+    if (!confirm('Bạn có chắc muốn từ chối lời mời này?')) return;
+    try {
+        const res = await fetch(`/app/friend/reject/${friendshipId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: 'Đã từ chối lời mời.', style: { background: '#64748b' } }).showToast();
+            }
+            const item = document.getElementById(`pending-request-item-${friendshipId}`);
+            if (item) item.remove();
+            updateSidebarPendingCount(-1);
+        } else {
+            alert(data.message || 'Không thể từ chối lời mời.');
+        }
+    } catch (e) {
+        alert('Lỗi kết nối.');
+    }
+}
+
+function updateSidebarPendingCount(delta) {
+    const countBadge = document.getElementById('sidebar-pending-requests-count');
+    const container = document.getElementById('sidebar-pending-requests-container');
+    const list = document.getElementById('sidebar-pending-requests-list');
+    if (!countBadge || !container) return;
+
+    let current = parseInt(countBadge.innerText) || 0;
+    current = Math.max(0, current + delta);
+    countBadge.innerText = current;
+
+    if (current <= 0 || (list && list.children.length === 0)) {
+        container.classList.add('hidden');
+    } else {
+        container.classList.remove('hidden');
     }
 }
 
@@ -542,6 +717,320 @@ async function submitCreateGroup() {
 // Giu alias de tuong thich nguoc neu co cho khac goi
 const sendFriendRequest = submitFriendRequest;
 const createGroup = submitCreateGroup;
+
+// ---------------------------------------------------------
+// LOGIC MODAL: QUAN LY THANH VIEN NHOM (GROUP MEMBERS)
+// ---------------------------------------------------------
+let currentGroupMembersData = null;
+let selectedNewMemberIds = new Set();
+
+async function openGroupMembersModal() {
+    openModal('modal-group-members');
+    const panel = document.getElementById('group-add-member-panel');
+    if (panel) panel.classList.add('hidden');
+    selectedNewMemberIds.clear();
+    await loadGroupMembers();
+}
+
+async function loadGroupMembers() {
+    const loadingEl = document.getElementById('group-members-loading');
+    const listEl = document.getElementById('group-members-list');
+    const subtitleEl = document.getElementById('group-members-count-subtitle');
+
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (listEl) listEl.classList.add('hidden');
+
+    try {
+        const res = await fetch(`/app/conversation/{{ $activeConversation?->id ?? 0 }}/members`);
+        const data = await res.json();
+        currentGroupMembersData = data;
+
+        if (loadingEl) loadingEl.classList.add('hidden');
+
+        if (res.ok && data.success) {
+            if (subtitleEl) subtitleEl.innerText = `${data.members.length} thành viên`;
+
+            let html = '';
+            data.members.forEach(m => {
+                const isSelf = m.id === data.current_user_id;
+                const canKick = data.is_current_user_admin && !isSelf;
+
+                html += `
+                    <div class="flex items-center justify-between p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/80 transition-all hover:border-slate-200 dark:hover:border-slate-700">
+                        <div class="flex items-center gap-3 min-w-0 flex-1">
+                            <div class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center shrink-0 overflow-hidden">
+                                ${m.avatar ? `<img src="${m.avatar}" class="w-full h-full object-cover" alt="${m.name}">` : `<span>${m.name.charAt(0).toUpperCase()}</span>`}
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5">
+                                    <h4 class="font-bold text-xs text-slate-900 dark:text-white truncate">${m.name}</h4>
+                                    ${isSelf ? '<span class="text-[10px] text-slate-400 font-normal">(Bạn)</span>' : ''}
+                                </div>
+                                <p class="text-[10px] text-slate-400 truncate">${m.email || 'Tham gia ' + m.joined_at}</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 shrink-0">
+                            ${m.is_admin ? `
+                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                    <i data-lucide="crown" class="w-3 h-3 text-amber-500"></i>
+                                    <span>Trưởng nhóm</span>
+                                </span>
+                            ` : `
+                                <span class="px-2 py-0.5 rounded-full text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800">
+                                    Thành viên
+                                </span>
+                            `}
+
+                            ${canKick ? `
+                                <button type="button" onclick="removeMemberFromGroup(${m.id}, '${m.name}')" 
+                                        class="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors" 
+                                        title="Mời rời khỏi nhóm">
+                                    <i data-lucide="user-x" class="w-4 h-4"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            if (listEl) {
+                listEl.innerHTML = html;
+                listEl.classList.remove('hidden');
+                if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+            }
+        } else {
+            if (subtitleEl) subtitleEl.innerText = 'Không thể tải danh sách';
+        }
+    } catch (e) {
+        if (loadingEl) loadingEl.classList.add('hidden');
+        if (subtitleEl) subtitleEl.innerText = 'Lỗi kết nối';
+    }
+}
+
+async function toggleAddMemberPanel() {
+    const panel = document.getElementById('group-add-member-panel');
+    if (!panel) return;
+
+    if (panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+        await loadAvailableFriendsForGroup();
+    } else {
+        panel.classList.add('hidden');
+    }
+}
+
+async function loadAvailableFriendsForGroup() {
+    const listEl = document.getElementById('group-add-member-list');
+    if (!listEl) return;
+    listEl.innerHTML = '<p class="text-xs text-slate-400 text-center py-3">Đang tải danh sách bạn bè...</p>';
+    selectedNewMemberIds.clear();
+
+    try {
+        const res = await fetch(`/app/conversation/{{ $activeConversation?->id ?? 0 }}/members/available-friends`);
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+            if (!data.friends || data.friends.length === 0) {
+                listEl.innerHTML = '<p class="text-xs text-slate-400 text-center py-3">Tất cả bạn bè của bạn đều đã có trong nhóm.</p>';
+                return;
+            }
+
+            let html = '';
+            data.friends.forEach(f => {
+                html += `
+                    <label class="flex items-center justify-between p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/80 cursor-pointer transition-colors">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200 font-bold text-xs flex items-center justify-center shrink-0 overflow-hidden">
+                                ${f.avatar ? `<img src="${f.avatar}" class="w-full h-full object-cover" alt="${f.name}">` : `<span>${f.name.charAt(0).toUpperCase()}</span>`}
+                            </div>
+                            <div class="min-w-0">
+                                <p class="text-xs font-bold text-slate-900 dark:text-white truncate">${f.name}</p>
+                                <p class="text-[10px] text-slate-400 truncate">${f.email}</p>
+                            </div>
+                        </div>
+                        <input type="checkbox" value="${f.id}" onchange="toggleSelectNewMember(this.value, this.checked)" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600">
+                    </label>
+                `;
+            });
+            listEl.innerHTML = html;
+        } else {
+            listEl.innerHTML = '<p class="text-xs text-rose-500 text-center py-2">Không thể tải danh sách bạn bè.</p>';
+        }
+    } catch (e) {
+        listEl.innerHTML = '<p class="text-xs text-rose-500 text-center py-2">Lỗi kết nối.</p>';
+    }
+}
+
+function toggleSelectNewMember(userId, isChecked) {
+    const id = parseInt(userId);
+    if (isChecked) {
+        selectedNewMemberIds.add(id);
+    } else {
+        selectedNewMemberIds.delete(id);
+    }
+}
+
+async function submitAddMembersToGroup() {
+    if (selectedNewMemberIds.size === 0) {
+        alert('Vui lòng chọn ít nhất một bạn bè để thêm vào nhóm.');
+        return;
+    }
+
+    const btn = document.getElementById('btn-submit-add-members');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span>Đang thêm thành viên...</span>';
+    }
+
+    try {
+        const res = await fetch(`/app/conversation/{{ $activeConversation?->id ?? 0 }}/members/add`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                user_ids: Array.from(selectedNewMemberIds)
+            })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: data.message || 'Đã thêm thành viên vào nhóm!', style: { background: '#10b981' } }).showToast();
+            }
+            toggleAddMemberPanel();
+            await loadGroupMembers();
+        } else {
+            alert(data.message || 'Không thể thêm thành viên.');
+        }
+    } catch (e) {
+        alert('Lỗi kết nối khi thêm thành viên.');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="check" class="w-3.5 h-3.5"></i><span>Xác nhận thêm vào nhóm</span>';
+            if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+        }
+    }
+}
+
+async function removeMemberFromGroup(userId, userName) {
+    if (!confirm(`Bạn có chắc muốn mời "${userName}" rời khỏi nhóm học tập?`)) return;
+
+    try {
+        const res = await fetch(`/app/conversation/{{ $activeConversation?->id ?? 0 }}/members/remove`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ user_id: userId })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: data.message || 'Đã mời thành viên rời nhóm.', style: { background: '#64748b' } }).showToast();
+            }
+            await loadGroupMembers();
+        } else {
+            alert(data.message || 'Không thể xóa thành viên.');
+        }
+    } catch (e) {
+        alert('Lỗi kết nối khi xóa thành viên.');
+    }
+}
+
+async function handleLeaveGroupClick() {
+    if (!confirm('Bạn có chắc chắn muốn rời khỏi nhóm học tập này?')) return;
+
+    try {
+        const res = await fetch(`/app/conversation/{{ $activeConversation?->id ?? 0 }}/leave`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            }
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (typeof Toastify !== 'undefined') {
+                Toastify({ text: 'Bạn đã rời nhóm học tập.', style: { background: '#64748b' } }).showToast();
+            }
+            setTimeout(() => {
+                window.location.href = data.redirect_url || '/app';
+            }, 600);
+        } else {
+            alert(data.message || 'Không thể rời nhóm.');
+        }
+    } catch (e) {
+        alert('Lỗi kết nối khi rời nhóm.');
+    }
+}
+
+// Lang nghe su kien ban be thoi gian thuc tren kenh ca nhan (Chay toan cuc bat ke co cuoc tro chuyen hay khong)
+document.addEventListener('DOMContentLoaded', () => {
+    if (typeof window.Echo !== 'undefined') {
+        window.Echo.private('App.Models.User.{{ Auth::id() }}')
+            .listen('.FriendshipEvent', (e) => {
+                if (e.action === 'request_sent') {
+                    if (typeof Toastify !== 'undefined') {
+                        Toastify({ text: e.message || `${e.sender.name} đã gửi lời mời kết bạn!`, style: { background: '#0284c7' }, duration: 4000 }).showToast();
+                    }
+                    const list = document.getElementById('sidebar-pending-requests-list');
+                    if (list) {
+                        const div = document.createElement('div');
+                        div.id = `pending-request-item-${e.friendshipId}`;
+                        div.className = 'flex items-center gap-2.5 p-2.5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-xl';
+                        div.innerHTML = `
+                            <div class="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
+                                ${e.sender.avatar ? `<img src="${e.sender.avatar}" alt="${e.sender.name}" class="w-full h-full object-cover">` : `<span>${e.sender.name ? e.sender.name.charAt(0).toUpperCase() : 'U'}</span>`}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="font-bold text-xs text-slate-900 dark:text-white truncate">${e.sender.name}</p>
+                                <p class="text-[10px] text-slate-500 truncate">${e.sender.email || ''}</p>
+                            </div>
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button type="button" onclick="acceptFriendFromSidebar(${e.friendshipId})" class="p-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors" title="Chấp nhận">
+                                    <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                                </button>
+                                <button type="button" onclick="rejectFriendFromSidebar(${e.friendshipId})" class="p-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 rounded-lg transition-colors" title="Từ chối">
+                                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                        `;
+                        list.prepend(div);
+                        if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+                        updateSidebarPendingCount(1);
+                    }
+                } else if (e.action === 'request_accepted') {
+                    if (typeof Toastify !== 'undefined') {
+                        Toastify({ text: e.message || `${e.sender.name} đã đồng ý kết bạn!`, style: { background: '#10b981' }, duration: 4000 }).showToast();
+                    }
+                } else if (e.action === 'request_canceled') {
+                    const item = document.getElementById(`pending-request-item-${e.friendshipId}`);
+                    if (item) {
+                        item.remove();
+                        updateSidebarPendingCount(-1);
+                    }
+                } else if (e.action === 'request_rejected') {
+                    if (typeof Toastify !== 'undefined') {
+                        Toastify({ text: 'Lời mời kết bạn đã bị từ chối.', style: { background: '#64748b' } }).showToast();
+                    }
+                } else if (e.action === 'unfriended') {
+                    if (typeof Toastify !== 'undefined') {
+                        Toastify({ text: `${e.sender.name} đã hủy kết bạn.`, style: { background: '#64748b' } }).showToast();
+                    }
+                }
+            });
+    }
+});
 
 @if(isset($activeConversation))
     let isLoadingOlderMessages = false;

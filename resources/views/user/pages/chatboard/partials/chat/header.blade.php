@@ -45,6 +45,10 @@
                 <button type="button" onclick="openMeetingLobby('video')" class="p-2 text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Phòng học & Họp trực tuyến">
                     <i data-lucide="presentation" class="w-5 h-5"></i>
                 </button>
+                <!-- 4. Quan ly thanh vien nhom hoc tap -->
+                <button type="button" onclick="openGroupMembersModal()" class="p-2 text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Thành viên nhóm">
+                    <i data-lucide="users" class="w-5 h-5"></i>
+                </button>
             @else
                 <!-- Cuoc goi 1-1 -->
                 <button type="button" onclick="startCall('voice', null, 'call')" class="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" title="Gọi thoại">

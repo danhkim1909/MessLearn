@@ -58,23 +58,28 @@ class CallSignalEvent implements ShouldBroadcastNow
      */
     public function broadcastOn(): array
     {
-        $channels = [
-            new PrivateChannel('conversation.' . $this->conversationId),
-        ];
-
+        // 1. Tin hieu gui dich danh cho 1 nguoi dung cu the (WebRTC Offer, Answer, ICE, Host mute)
         if ($this->targetUserId) {
-            $channels[] = new PrivateChannel('App.Models.User.' . $this->targetUserId);
+            return [
+                new PrivateChannel('App.Models.User.' . $this->targetUserId),
+            ];
         }
 
-        if (!empty($this->targetUserIds)) {
+        // 2. Tin hieu do chuong cuoc goi den (incoming_call): Phat toi kenh ca nhan tung thanh vien
+        if ($this->action === 'incoming_call' && !empty($this->targetUserIds)) {
+            $channels = [];
             foreach ($this->targetUserIds as $uid) {
                 if ($uid && (int)$uid !== $this->senderId) {
                     $channels[] = new PrivateChannel('App.Models.User.' . (int)$uid);
                 }
             }
+            return !empty($channels) ? $channels : [new PrivateChannel('conversation.' . $this->conversationId)];
         }
 
-        return $channels;
+        // 3. Cac tin hieu chung trong phong hop: Phat tren kenh phong hoi thoai
+        return [
+            new PrivateChannel('conversation.' . $this->conversationId),
+        ];
     }
 
     public function broadcastAs(): string

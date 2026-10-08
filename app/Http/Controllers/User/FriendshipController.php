@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\User;
 
+use App\Events\FriendshipEvent;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
@@ -146,6 +147,20 @@ class FriendshipController extends Controller
             'status' => 'pending',
         ]);
 
+        // Phat su kien Reverb toi nguoi nhan
+        broadcast(new FriendshipEvent(
+            receiverId: (int)$friend->id,
+            action: 'request_sent',
+            sender: [
+                'id' => Auth::id(),
+                'name' => Auth::user()->name,
+                'avatar' => Auth::user()->avatar_url,
+                'email' => Auth::user()->email,
+            ],
+            friendshipId: $newFriendship->id,
+            message: Auth::user()->name . ' đã gửi cho bạn một lời mời kết bạn.'
+        ))->toOthers();
+
         return response()->json([
             'success' => true,
             'message' => 'Đã gửi lời mời kết bạn thành công.',
@@ -183,6 +198,21 @@ class FriendshipController extends Controller
                 return $conv;
             });
 
+            // Phat su kien Reverb toi nguoi gui loi moi ban dau
+            broadcast(new FriendshipEvent(
+                receiverId: (int)$friendship->user_id,
+                action: 'request_accepted',
+                sender: [
+                    'id' => Auth::id(),
+                    'name' => Auth::user()->name,
+                    'avatar' => Auth::user()->avatar_url,
+                    'email' => Auth::user()->email,
+                ],
+                friendshipId: $friendship->id,
+                conversationId: $conversation->id,
+                message: Auth::user()->name . ' đã đồng ý lời mời kết bạn của bạn.'
+            ))->toOthers();
+
             if (request()->expectsJson()) {
                 return response()->json([
                     'success' => true,
@@ -200,5 +230,120 @@ class FriendshipController extends Controller
             }
             return redirect()->back()->with('error', 'Đã xảy ra lỗi khi đồng ý kết bạn.');
         }
+    }
+
+    public function cancelRequest($id)
+    {
+        $currentUserId = Auth::id();
+        $friendship = Friendship::where('id', $id)
+            ->where('user_id', $currentUserId)
+            ->where('status', 'pending')
+            ->first();
+
+        if (!$friendship) {
+            return response()->json(['message' => 'Lời mời kết bạn không tồn tại hoặc đã được xử lý.'], 404);
+        }
+
+        $friendId = $friendship->friend_id;
+        $friendship->delete();
+
+        // Phat su kien Reverb de nguoi nhan xoa loi moi khoi Sidebar theo thoi gian thuc
+        broadcast(new FriendshipEvent(
+            receiverId: (int)$friendId,
+            action: 'request_canceled',
+            sender: [
+                'id' => Auth::id(),
+                'name' => Auth::user()->name,
+                'avatar' => Auth::user()->avatar_url,
+                'email' => Auth::user()->email,
+            ],
+            friendshipId: (int)$id,
+            message: 'Lời mời kết bạn đã được rút lại.'
+        ))->toOthers();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã hủy lời mời kết bạn thành công.'
+        ]);
+    }
+
+    public function rejectRequest($id)
+    {
+        $currentUserId = Auth::id();
+        $friendship = Friendship::where('id', $id)
+            ->where('friend_id', $currentUserId)
+            ->where('status', 'pending')
+            ->first();
+
+        if (!$friendship) {
+            if (request()->expectsJson()) {
+                return response()->json(['message' => 'Lời mời kết bạn không tồn tại hoặc đã được xử lý.'], 404);
+            }
+            return redirect()->back()->with('error', 'Lời mời kết bạn không tồn tại.');
+        }
+
+        $senderId = $friendship->user_id;
+        $friendship->delete();
+
+        // Phat su kien Reverb toi nguoi gui ban dau
+        broadcast(new FriendshipEvent(
+            receiverId: (int)$senderId,
+            action: 'request_rejected',
+            sender: [
+                'id' => Auth::id(),
+                'name' => Auth::user()->name,
+                'avatar' => Auth::user()->avatar_url,
+                'email' => Auth::user()->email,
+            ],
+            friendshipId: (int)$id,
+            message: 'Lời mời kết bạn đã bị từ chối.'
+        ))->toOthers();
+
+        if (request()->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã từ chối lời mời kết bạn.'
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Đã từ chối lời mời kết bạn.');
+    }
+
+    public function unfriend($friendId)
+    {
+        $currentUserId = Auth::id();
+        $friendship = Friendship::where('status', 'accepted')
+            ->where(function ($q) use ($currentUserId, $friendId) {
+                $q->where('user_id', $currentUserId)->where('friend_id', $friendId);
+            })
+            ->orWhere(function ($q) use ($currentUserId, $friendId) {
+                $q->where('user_id', $friendId)->where('friend_id', $currentUserId);
+            })
+            ->first();
+
+        if (!$friendship) {
+            return response()->json(['message' => 'Quan hệ bạn bè không tồn tại.'], 404);
+        }
+
+        $friendship->delete();
+
+        // Phat su kien Reverb toi nguoi bi huy ket ban
+        broadcast(new FriendshipEvent(
+            receiverId: (int)$friendId,
+            action: 'unfriended',
+            sender: [
+                'id' => Auth::id(),
+                'name' => Auth::user()->name,
+                'avatar' => Auth::user()->avatar_url,
+                'email' => Auth::user()->email,
+            ],
+            friendshipId: $friendship->id,
+            message: Auth::user()->name . ' đã hủy kết bạn.'
+        ))->toOthers();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã hủy kết bạn thành công.'
+        ]);
     }
 }

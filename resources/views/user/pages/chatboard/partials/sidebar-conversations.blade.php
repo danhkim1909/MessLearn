@@ -19,32 +19,37 @@
         </div>
     </div>
 
-    @if(isset($pendingRequests) && $pendingRequests->count() > 0)
-    <div class="px-3 pb-1">
-        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider pb-1.5">Lời mời kết bạn ({{ $pendingRequests->count() }})</p>
-        @foreach($pendingRequests as $req)
-        <div class="flex items-center gap-2.5 p-2.5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-xl mb-1.5">
-            <div class="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
-                @if($req->sender->avatar_url)
-                    <img src="{{ $req->sender->avatar_url }}" alt="{{ $req->sender->name }}" class="w-full h-full object-cover">
-                @else
-                    {{ strtoupper(substr($req->sender->name, 0, 1)) }}
-                @endif
+    <div id="sidebar-pending-requests-container" class="px-3 pb-1 {{ (isset($pendingRequests) && $pendingRequests->count() > 0) ? '' : 'hidden' }}">
+        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider pb-1.5 flex items-center justify-between">
+            <span>Lời mời kết bạn</span>
+            <span id="sidebar-pending-requests-count" class="bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full text-[10px] font-bold">{{ isset($pendingRequests) ? $pendingRequests->count() : 0 }}</span>
+        </p>
+        <div id="sidebar-pending-requests-list" class="space-y-1.5">
+            @foreach($pendingRequests ?? [] as $req)
+            <div id="pending-request-item-{{ $req->id }}" class="flex items-center gap-2.5 p-2.5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-xl">
+                <div class="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
+                    @if($req->sender && $req->sender->avatar_url)
+                        <img src="{{ $req->sender->avatar_url }}" alt="{{ $req->sender->name }}" class="w-full h-full object-cover">
+                    @else
+                        {{ strtoupper(substr($req->sender?->name ?? 'U', 0, 1)) }}
+                    @endif
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="font-bold text-xs text-slate-900 dark:text-white truncate">{{ $req->sender?->name ?? 'Người dùng' }}</p>
+                    <p class="text-[10px] text-slate-500 truncate">{{ $req->sender?->email ?? '' }}</p>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                    <button type="button" onclick="acceptFriendFromSidebar({{ $req->id }})" class="p-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors" title="Chấp nhận">
+                        <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button type="button" onclick="rejectFriendFromSidebar({{ $req->id }})" class="p-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 rounded-lg transition-colors" title="Từ chối">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
             </div>
-            <div class="flex-1 min-w-0">
-                <p class="font-bold text-xs text-slate-900 dark:text-white truncate">{{ $req->sender->name }}</p>
-                <p class="text-[10px] text-slate-500 truncate">{{ $req->sender->email }}</p>
-            </div>
-            <form method="POST" action="{{ route('app.friend.accept', $req->id) }}" class="shrink-0">
-                @csrf
-                <button type="submit" class="p-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors" title="Chấp nhận">
-                    <i data-lucide="check" class="w-3.5 h-3.5"></i>
-                </button>
-            </form>
+            @endforeach
         </div>
-        @endforeach
     </div>
-    @endif
 
     <div class="flex-1 overflow-y-auto p-2 space-y-1">
         @if(isset($conversations) && $conversations->isEmpty())

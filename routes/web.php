@@ -26,6 +26,9 @@ Route::prefix('app')->middleware(CheckLoginMiddleware::class)->name('app.')->gro
         Route::get('/search', [FriendshipController::class, 'search'])->name('search');
         Route::post('/send', [FriendshipController::class, 'sendRequest'])->name('send');
         Route::post('/accept/{id}', [FriendshipController::class, 'acceptRequest'])->name('accept');
+        Route::post('/cancel/{id}', [FriendshipController::class, 'cancelRequest'])->name('cancel');
+        Route::post('/reject/{id}', [FriendshipController::class, 'rejectRequest'])->name('reject');
+        Route::post('/unfriend/{friendId}', [FriendshipController::class, 'unfriend'])->name('unfriend');
     });
 
     Route::prefix('profile')->name('profile.')->group(function () {
@@ -35,6 +38,11 @@ Route::prefix('app')->middleware(CheckLoginMiddleware::class)->name('app.')->gro
 
     Route::prefix('conversation')->name('conversation.')->group(function () {
         Route::post('/group', [ConversationController::class, 'storeGroup'])->name('store-group');
+        Route::get('/{conversation}/members', [ConversationController::class, 'getMembers'])->name('members');
+        Route::get('/{conversation}/members/available-friends', [ConversationController::class, 'getAvailableFriends'])->name('members.available-friends');
+        Route::post('/{conversation}/members/add', [ConversationController::class, 'addMembers'])->name('members.add');
+        Route::post('/{conversation}/members/remove', [ConversationController::class, 'removeMember'])->name('members.remove');
+        Route::post('/{conversation}/leave', [ConversationController::class, 'leaveGroup'])->name('leave');
         Route::post('/{conversation}/message', [\App\Http\Controllers\User\MessageController::class, 'store'])->name('message.store');
         Route::get('/{conversation}/messages/load-more', [\App\Http\Controllers\User\MessageController::class, 'loadMore'])->name('message.load-more');
         Route::get('/{conversation}/messages/search', [\App\Http\Controllers\User\MessageController::class, 'search'])->name('message.search');

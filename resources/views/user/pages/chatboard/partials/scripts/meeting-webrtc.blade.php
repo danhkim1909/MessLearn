@@ -1506,6 +1506,17 @@
             }
         }
 
+        if (typeof Toastify === 'function') {
+            const leaveMsg = endForAll 
+                ? 'Bạn đã kết thúc phòng học cho tất cả thành viên.' 
+                : 'Bạn đã rời khỏi cuộc gọi.';
+            Toastify({
+                text: leaveMsg,
+                style: { background: '#64748b', borderRadius: '0.5rem' },
+                duration: 3000
+            }).showToast();
+        }
+
         cleanupCall();
     };
 
@@ -1554,6 +1565,13 @@
 
         teardownScreenShareSpotlight();
         updateAdaptiveVideoGrid();
+
+        // An thanh Banner phong hoc nhom tren man hinh cua chinh minh
+        const activeBanner = document.getElementById('active-meeting-banner');
+        if (activeBanner) {
+            activeBanner.classList.add('hidden');
+            activeBanner.classList.remove('flex');
+        }
 
         isGroupMeeting = false;
         isMeetingHost = false;
@@ -1668,6 +1686,25 @@
         }
     };
 
+    // Bo nho dem chong trung lap tin hieu signaling (Deduplication cache)
+    const recentSignalSignatures = new Map();
+    function isDuplicateSignal(e) {
+        const payloadKey = (e.payload?.user_id || e.payload?.left_user_id || '') + '_' + (e.payload?.remaining_count ?? '');
+        const key = `${e.action}_${e.senderId}_${e.roomCode || ''}_${payloadKey}`;
+        const now = Date.now();
+        const lastTime = recentSignalSignatures.get(key);
+        if (lastTime && (now - lastTime) < 1500) {
+            return true;
+        }
+        recentSignalSignatures.set(key, now);
+        if (recentSignalSignatures.size > 50) {
+            for (const [k, time] of recentSignalSignatures) {
+                if (now - time > 5000) recentSignalSignatures.delete(k);
+            }
+        }
+        return false;
+    }
+
     // --- Ham xu ly tap trung cac su kien Signaling ---
     function handleCallSignal(e) {
         if (Number(e.senderId) === Number(currentUserId)) return;
@@ -1675,6 +1712,16 @@
         // Loc tin hieu huong dich: Neu tin hieu co chi dinh targetUserId ma khong phai minh thi bo qua
         const targetId = e.targetUserId || e.target_user_id;
         if (targetId && Number(targetId) !== Number(currentUserId)) {
+            return;
+        }
+
+        // Bo loc chong trung lap cac su kien hien thi thong bao hoac cap nhat phong
+        const toastActions = [
+            'participant_joined', 'participant_left', 'end_call',
+            'raise_hand', 'lower_hand', 'host_mute_user', 'host_mute_all',
+            'meeting_started_banner'
+        ];
+        if (toastActions.includes(e.action) && isDuplicateSignal(e)) {
             return;
         }
 
