@@ -93,4 +93,10 @@ class Conversation extends Model
     {
         return $this->hasMany(Meeting::class);
     }
+
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class);
+    }
 }
+

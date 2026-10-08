@@ -19,6 +19,21 @@
             <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 group-hover:text-sky-500 transition-colors"></i>
         </button>
 
+        {{-- Bảng phân công công việc & Nhiệm vụ nhóm --}}
+        <button type="button" onclick="openTaskBoardModal()" class="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl hover:border-indigo-500 hover:shadow-md hover:shadow-indigo-500/10 transition-all group">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <i data-lucide="check-square" class="w-5 h-5"></i>
+                </div>
+                <div class="text-left">
+                    <h4 class="font-bold text-sm text-slate-900 dark:text-white">Phân công việc</h4>
+                    <p class="text-[10px] text-slate-500">Nhiệm vụ & Tiến độ nhóm</p>
+                </div>
+            </div>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300 group-hover:text-indigo-500 transition-colors"></i>
+        </button>
+
+
         <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 pt-1">Sắp có</p>
 
         {{-- Bảng xếp hạng - placeholder --}}

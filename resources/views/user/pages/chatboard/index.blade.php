@@ -50,6 +50,8 @@
     @include('user.pages.chatboard.partials.modals.modal-partner-profile')
     @include('user.pages.chatboard.partials.modals.modal-user-settings')
     @include('user.pages.chatboard.partials.modals.modal-change-nickname')
+    @include('user.pages.chatboard.partials.modals.modal-task-board')
+
 
 @endsection
 
@@ -62,7 +64,9 @@
     @include('user.pages.chatboard.partials.scripts.image-canvas')
     @include('user.pages.chatboard.partials.scripts.mini-games')
     @include('user.pages.chatboard.partials.scripts.quiz')
+    @include('user.pages.chatboard.partials.scripts.task-board')
 @endif
+
 @include('user.pages.chatboard.partials.scripts.meeting-webrtc')
 @include('user.pages.chatboard.partials.scripts.chat-core')
 @include('user.pages.chatboard.partials.scripts.user-settings')

@@ -58,6 +58,12 @@ Route::prefix('app')->middleware(CheckLoginMiddleware::class)->name('app.')->gro
         Route::post('/{conversation}/members/add', [ConversationController::class, 'addMembers'])->name('members.add');
         Route::post('/{conversation}/members/remove', [ConversationController::class, 'removeMember'])->name('members.remove');
         Route::post('/{conversation}/leave', [ConversationController::class, 'leaveGroup'])->name('leave');
+        Route::get('/{conversation}/tasks', [\App\Http\Controllers\User\TaskController::class, 'index'])->name('tasks.index');
+        Route::post('/{conversation}/tasks', [\App\Http\Controllers\User\TaskController::class, 'store'])->name('tasks.store');
+        Route::post('/{conversation}/tasks/{task}/status', [\App\Http\Controllers\User\TaskController::class, 'updateStatus'])->name('tasks.status');
+        Route::post('/{conversation}/tasks/{task}/update', [\App\Http\Controllers\User\TaskController::class, 'update'])->name('tasks.update');
+        Route::delete('/{conversation}/tasks/{task}', [\App\Http\Controllers\User\TaskController::class, 'destroy'])->name('tasks.destroy');
+
         Route::post('/{conversation}/message', [\App\Http\Controllers\User\MessageController::class, 'store'])->name('message.store');
         Route::get('/{conversation}/messages/load-more', [\App\Http\Controllers\User\MessageController::class, 'loadMore'])->name('message.load-more');
         Route::get('/{conversation}/messages/search', [\App\Http\Controllers\User\MessageController::class, 'search'])->name('message.search');
