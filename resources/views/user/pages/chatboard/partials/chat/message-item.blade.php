@@ -20,10 +20,20 @@
                     <span class="text-[10px] text-slate-400">{{ $message->created_at->format('H:i') }}</span>
                 </div>
             @else
-                <div class="flex items-baseline gap-2 mb-1 mr-1 justify-end">
-                    <span class="text-[10px] text-slate-400">{{ $message->created_at->format('H:i') }}</span>
+                <div class="flex items-center gap-1.5 mb-1 mr-1 justify-end text-[10px] text-slate-400">
+                    <span>{{ $message->created_at->format('H:i') }}</span>
+                    @if(!$activeConversation->is_group)
+                        @php
+                            $otherPart = $activeConversation->participants->where('user_id', '!=', Auth::id())->first();
+                            $isSeen = ($otherPart?->last_read_message_id ?? 0) >= $message->id;
+                        @endphp
+                        <span id="msg-status-{{ $message->id }}" class="flex items-center" title="{{ $isSeen ? 'Đã xem' : 'Đã gửi' }}">
+                            <i data-lucide="{{ $isSeen ? 'check-check' : 'check' }}" class="w-3.5 h-3.5 {{ $isSeen ? 'text-sky-500' : 'text-slate-400' }}"></i>
+                        </span>
+                    @endif
                 </div>
             @endif
+
             @if($isRecalled)
                 <div class="border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-400 dark:text-slate-500 italic px-3.5 py-2 rounded-2xl text-xs max-w-md flex items-center gap-1.5 select-none">
                     <i data-lucide="ban" class="w-3.5 h-3.5 shrink-0 opacity-70"></i>
@@ -476,6 +486,24 @@
                 </div>
             </div>
             @endif
+
+            <!-- Danh sach nguoi da xem dung tai tin nhan nay -->
+            @php
+                $readersAtThisMessage = $activeConversation->is_group 
+                    ? $activeConversation->participants->filter(fn($p) => $p->user_id !== Auth::id() && (int)$p->last_read_message_id === $message->id)
+                    : collect();
+            @endphp
+            <div id="readers-stack-{{ $message->id }}" class="flex items-center -space-x-1 mt-1 {{ $isMine ? 'justify-end' : 'justify-start' }} {{ $readersAtThisMessage->isEmpty() ? 'hidden' : '' }}">
+                @foreach($readersAtThisMessage as $p)
+                    <div id="reader-avatar-{{ $p->user_id }}-{{ $message->id }}" class="w-3.5 h-3.5 rounded-full border border-white dark:border-slate-800 bg-slate-300 dark:bg-slate-600 overflow-hidden text-[8px] flex items-center justify-center font-bold shrink-0 shadow-xs" title="{{ $p->user->name }} đã xem">
+                        @if($p->user && $p->user->avatar_url)
+                            <img src="{{ $p->user->avatar_url }}" alt="{{ $p->user->name }}" class="w-full h-full object-cover">
+                        @else
+                            {{ strtoupper(substr($p->user?->name ?? 'U', 0, 1)) }}
+                        @endif
+                    </div>
+                @endforeach
+            </div>
         </div>
     </div>
 </div>

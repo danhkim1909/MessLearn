@@ -72,9 +72,38 @@
                         $avatarChar = strtoupper(substr($name, 0, 1));
                     }
                     $isActive = isset($activeConversation) && $activeConversation->id === $conv->id;
+                    $unreadCount = $conv->unread_count ?? 0;
+                    $lastMessage = $conv->messages->first();
+
+                    $lastMsgText = '';
+                    if ($lastMessage) {
+                        $senderPrefix = $lastMessage->user_id === Auth::id() ? 'Bạn: ' : '';
+                        if ($lastMessage->type === 'image') {
+                            $lastMsgText = $senderPrefix . '[Hình ảnh]';
+                        } elseif ($lastMessage->type === 'audio') {
+                            $lastMsgText = $senderPrefix . '[Tin nhắn thoại]';
+                        } elseif ($lastMessage->type === 'quiz') {
+                            $lastMsgText = $senderPrefix . '[Bài kiểm tra]';
+                        } elseif ($lastMessage->type === 'event') {
+                            $lastMsgText = $senderPrefix . '[Lịch hẹn]';
+                        } elseif ($lastMessage->type === 'document') {
+                            $lastMsgText = $senderPrefix . '[Tài liệu]';
+                        } elseif ($lastMessage->type === 'game_dice') {
+                            $lastMsgText = $senderPrefix . '[Tung xúc xắc]';
+                        } elseif ($lastMessage->type === 'game_rps') {
+                            $lastMsgText = $senderPrefix . '[Oẳn tù tì]';
+                        } elseif ($lastMessage->type === 'recalled') {
+                            $lastMsgText = $senderPrefix . '[Tin nhắn đã gỡ]';
+                        } else {
+                            $lastMsgText = $senderPrefix . $lastMessage->body;
+                        }
+                    } else {
+                        $lastMsgText = $isGroup ? 'Nhóm học tập' : 'Bắt đầu trò chuyện';
+                    }
                 @endphp
 
                 <a href="{{ route('app.chat-board.show', $conv->id) }}" 
+                   id="sidebar-conv-{{ $conv->id }}"
                    class="flex items-center gap-3 p-2.5 rounded-xl transition-all {{ $isActive ? 'bg-sky-50 dark:bg-sky-900/30' : 'hover:bg-white dark:hover:bg-slate-800' }}">
                     
                     <div class="relative shrink-0">
@@ -110,9 +139,14 @@
                                 @endif
                             </div>
                         </div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
-                            {{ $isGroup ? 'Nhóm học tập' : 'Trò chuyện cá nhân' }}
-                        </p>
+                        <div class="flex items-center justify-between gap-2 mt-0.5">
+                            <p id="sidebar-last-msg-{{ $conv->id }}" class="text-xs text-slate-500 dark:text-slate-400 truncate flex-1 {{ ($unreadCount > 0 && !$isActive) ? 'font-bold text-slate-800 dark:text-slate-200' : '' }}">
+                                {{ $lastMsgText }}
+                            </p>
+                            <span id="unread-badge-{{ $conv->id }}" class="shrink-0 px-1.5 py-0.5 min-w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-extrabold bg-sky-500 text-white shadow-xs {{ ($unreadCount > 0 && !$isActive) ? '' : 'hidden' }}">
+                                {{ $unreadCount > 99 ? '99+' : $unreadCount }}
+                            </span>
+                        </div>
                     </div>
                 </a>
             @endforeach

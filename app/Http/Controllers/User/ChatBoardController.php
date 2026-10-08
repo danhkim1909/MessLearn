@@ -29,15 +29,32 @@ class ChatBoardController extends Controller
 
         $user = Auth::user();
         $conversations = $user->conversations()
-            ->with(['participants.user', 'messages' => function ($query) {
-                $query->latest()->limit(1);
-            }])
+            ->with([
+                'participants.user',
+                'messages' => function ($query) {
+                    $query->latest('id')->limit(1)->with('user');
+                }
+            ])
             ->orderByDesc('conversation_participants.is_pinned')
             ->orderByDesc('conversations.updated_at')
-            ->get();
+            ->get()
+            ->map(function ($conv) use ($userId) {
+                $myParticipant = $conv->participants->where('user_id', $userId)->first();
+                $lastReadId = (int)($myParticipant?->last_read_message_id ?? 0);
+
+                // Tinh so tin nhan chua doc cua nguoi khac gui sau moc lastReadId
+                $unreadCount = $conv->messages()
+                    ->where('user_id', '!=', $userId)
+                    ->where('id', '>', $lastReadId)
+                    ->count();
+
+                $conv->unread_count = $unreadCount;
+                return $conv;
+            });
 
         return compact('pendingRequests', 'friends', 'conversations');
     }
+
 
     public function index()
     {
@@ -100,6 +117,30 @@ class ChatBoardController extends Controller
             ->first();
 
         $currentParticipant = $conversation->participants()->where('user_id', $userId)->first();
+
+        // Tu dong danh dau da xem den tin nhan moi nhat khi mo cuoc tro chuyen
+        $latestMessageId = $conversation->messages()->latest('id')->value('id');
+        if ($latestMessageId && $currentParticipant) {
+            $latestMessageId = (int)$latestMessageId;
+            $currentLastRead = (int)($currentParticipant->last_read_message_id ?? 0);
+
+            if ($latestMessageId > $currentLastRead) {
+                $currentParticipant->update([
+                    'last_read_message_id' => $latestMessageId,
+                    'last_read_at' => now(),
+                ]);
+
+                // Phat song su kien thoi gian thuc den cac thanh vien khac
+                broadcast(new \App\Events\MessageRead(
+                    $conversation->id,
+                    $userId,
+                    Auth::user()->name,
+                    Auth::user()->avatar_url,
+                    $latestMessageId,
+                    $currentParticipant->last_read_at->toIso8601String()
+                ))->toOthers();
+            }
+        }
 
         $data = $this->getSidebarData();
         $data['activeConversation'] = $conversation;

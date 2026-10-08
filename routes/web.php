@@ -52,6 +52,7 @@ Route::prefix('app')->middleware(CheckLoginMiddleware::class)->name('app.')->gro
         Route::post('/{conversation}/pin', [ConversationController::class, 'togglePin'])->name('pin');
         Route::post('/{conversation}/mute', [ConversationController::class, 'updateMute'])->name('mute');
         Route::post('/{conversation}/nickname', [ConversationController::class, 'updateNickname'])->name('nickname');
+        Route::post('/{conversation}/read', [ConversationController::class, 'markAsRead'])->name('read');
         Route::get('/{conversation}/members', [ConversationController::class, 'getMembers'])->name('members');
         Route::get('/{conversation}/members/available-friends', [ConversationController::class, 'getAvailableFriends'])->name('members.available-friends');
         Route::post('/{conversation}/members/add', [ConversationController::class, 'addMembers'])->name('members.add');

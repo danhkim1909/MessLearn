@@ -1676,8 +1676,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     updateChatBlockedUI(false, false, e.sender.id);
                 }
+            })
+            .listen('.MessageSent', (e) => {
+                const currentActiveConvId = {{ $activeConversation?->id ?? 0 }};
+                if (e.message && e.message.conversation_id !== currentActiveConvId) {
+                    updateSidebarLastMessagePreview(e.message);
+                    updateSidebarUnreadCount(e.message.conversation_id, 1);
+                }
             });
     }
+
 });
 
 @if(isset($activeConversation))
@@ -1897,11 +1905,17 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <span class="text-[10px] text-slate-400">${timeStr}</span>
                             </div>
                         ` : `
-                            <div class="flex items-baseline gap-2 mb-1 mr-1 justify-end">
-                                <span class="text-[10px] text-slate-400">${timeStr}</span>
+                            <div class="flex items-center gap-1.5 mb-1 mr-1 justify-end text-[10px] text-slate-400">
+                                <span>${timeStr}</span>
+                                ${!{{ ($activeConversation?->is_group ?? false) ? 'true' : 'false' }} ? `
+                                    <span id="msg-status-${message.id}" class="flex items-center" title="Đã gửi">
+                                        <i data-lucide="check" class="w-3.5 h-3.5 text-slate-400"></i>
+                                    </span>
+                                ` : ''}
                             </div>
                         `}
                         <div class="${isMine ? 'bg-sky-500 text-white rounded-tr-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-sm'} px-4 py-2.5 rounded-2xl text-xs max-w-md relative group">
+
                             <div class="absolute ${isMine ? 'right-full mr-2' : 'left-full ml-2'} top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
                                 <div class="relative reaction-picker-wrap">
                                     <button type="button" onclick="toggleReactionMenu(${message.id})" class="p-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-500 shadow-sm flex items-center justify-center transition-colors" title="Thả cảm xúc">
@@ -1957,9 +1971,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             ${innerContent}
                             <div id="reactions-bar-${message.id}" class="flex flex-wrap gap-1 mt-1.5 ${isMine ? 'justify-end' : 'justify-start'} hidden"></div>
                         </div>
+                        <div id="readers-stack-${message.id}" class="flex items-center -space-x-1 mt-1 ${isMine ? 'justify-end' : 'justify-start'} hidden"></div>
                     </div>
                 </div>
             </div>
+
         `;
     }
 
@@ -4071,6 +4087,122 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // =========================================================
+    // LOGIC DA XEM (READ RECEIPTS) & DEM TIN CHUA DOC
+    // =========================================================
+    async function markCurrentConversationAsRead(messageId = null) {
+        const convId = {{ $activeConversation?->id ?? 0 }};
+        if (!convId) return;
+
+        const badge = document.getElementById('unread-badge-' + convId);
+        if (badge) {
+            badge.classList.add('hidden');
+            badge.innerText = '0';
+        }
+        const sidebarMsg = document.getElementById('sidebar-last-msg-' + convId);
+        if (sidebarMsg) {
+            sidebarMsg.classList.remove('font-bold', 'text-slate-800', 'dark:text-slate-200');
+        }
+
+        try {
+            await fetch(`{{ url('app/conversation') }}/${convId}/read`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ message_id: messageId })
+            });
+        } catch (err) {
+            // Im lang
+        }
+    }
+
+    function handleMessageReadEvent(e) {
+        if (!e || e.userId === {{ Auth::id() }}) return;
+
+        const isGroup = {{ ($activeConversation?->is_group ?? false) ? 'true' : 'false' }};
+        const readMessageId = parseInt(e.lastReadMessageId) || 0;
+
+        if (!isGroup) {
+            document.querySelectorAll('[id^="msg-status-"]').forEach(el => {
+                const msgId = parseInt(el.id.replace('msg-status-', ''));
+                if (msgId <= readMessageId) {
+                    el.title = 'Đã xem';
+                    el.innerHTML = '<i data-lucide="check-check" class="w-3.5 h-3.5 text-sky-500"></i>';
+                }
+            });
+        } else {
+            document.querySelectorAll(`[id^="reader-avatar-${e.userId}-"]`).forEach(el => {
+                const parentStack = el.closest('[id^="readers-stack-"]');
+                el.remove();
+                if (parentStack && parentStack.children.length === 0) {
+                    parentStack.classList.add('hidden');
+                }
+            });
+
+            const targetStack = document.getElementById(`readers-stack-${readMessageId}`);
+            if (targetStack) {
+                const avatarInitial = (e.userName || 'U').charAt(0).toUpperCase();
+                const avatarContent = e.userAvatar 
+                    ? `<img src="${e.userAvatar}" alt="${e.userName}" class="w-full h-full object-cover">` 
+                    : avatarInitial;
+                const avatarEl = `
+                    <div id="reader-avatar-${e.userId}-${readMessageId}" class="w-3.5 h-3.5 rounded-full border border-white dark:border-slate-800 bg-slate-300 dark:bg-slate-600 overflow-hidden text-[8px] flex items-center justify-center font-bold shrink-0 shadow-xs" title="${e.userName} đã xem">
+                        ${avatarContent}
+                    </div>
+                `;
+                targetStack.insertAdjacentHTML('beforeend', avatarEl);
+                targetStack.classList.remove('hidden');
+            }
+        }
+
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    }
+
+    function updateSidebarLastMessagePreview(message) {
+        if (!message) return;
+        const msgEl = document.getElementById('sidebar-last-msg-' + message.conversation_id);
+        if (msgEl) {
+            let preview = message.body || '';
+            const isMine = message.user_id === {{ Auth::id() }};
+            const prefix = isMine ? 'Bạn: ' : '';
+            if (message.type === 'image') preview = prefix + '[Hình ảnh]';
+            else if (message.type === 'audio') preview = prefix + '[Tin nhắn thoại]';
+            else if (message.type === 'quiz') preview = prefix + '[Bài kiểm tra]';
+            else if (message.type === 'event') preview = prefix + '[Lịch hẹn]';
+            else if (message.type === 'document') preview = prefix + '[Tài liệu]';
+            else if (message.type === 'game_dice') preview = prefix + '[Tung xúc xắc]';
+            else if (message.type === 'game_rps') preview = prefix + '[Oẳn tù tì]';
+            else if (message.type === 'recalled') preview = prefix + '[Tin nhắn đã gỡ]';
+            else preview = prefix + preview;
+
+            msgEl.innerText = preview;
+        }
+    }
+
+    function updateSidebarUnreadCount(conversationId, delta = 1) {
+        const badge = document.getElementById('unread-badge-' + conversationId);
+        if (badge) {
+            let current = parseInt(badge.innerText) || 0;
+            current = Math.max(0, current + delta);
+            if (current > 0) {
+                badge.innerText = current > 99 ? '99+' : current;
+                badge.classList.remove('hidden');
+                const sidebarMsg = document.getElementById('sidebar-last-msg-' + conversationId);
+                if (sidebarMsg) {
+                    sidebarMsg.classList.add('font-bold', 'text-slate-800', 'dark:text-slate-200');
+                }
+            } else {
+                badge.classList.add('hidden');
+                badge.innerText = '0';
+            }
+        }
+    }
+
     // Event Listeners (Echo Realtime & Click Outside)
     document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('chat-messages-container');
@@ -4090,6 +4222,16 @@ document.addEventListener('DOMContentLoaded', () => {
         updateReminderBannerCountdown();
         setInterval(updateReminderBannerCountdown, 1000);
 
+        // Tu dong danh dau da doc khi quay lai tab trinh duyet
+        window.addEventListener('focus', () => {
+            markCurrentConversationAsRead();
+        });
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                markCurrentConversationAsRead();
+            }
+        });
+
         if (typeof window.Echo !== 'undefined') {
             window.Echo.private('conversation.{{ $activeConversation?->id ?? 0 }}')
                 .listen('.MessageSent', (e) => {
@@ -4107,6 +4249,13 @@ document.addEventListener('DOMContentLoaded', () => {
                             );
                         }
                     }
+                    updateSidebarLastMessagePreview(e.message);
+                    if (e.message.user_id !== {{ Auth::id() }} && !document.hidden) {
+                        markCurrentConversationAsRead(e.message.id);
+                    }
+                })
+                .listen('.MessageRead', (e) => {
+                    handleMessageReadEvent(e);
                 })
                 .listen('.MessageUpdated', (e) => {
                     updateMessageInChat(e.message);
@@ -4143,5 +4292,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
 @endif
 </script>

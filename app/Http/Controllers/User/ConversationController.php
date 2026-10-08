@@ -615,4 +615,46 @@ class ConversationController extends Controller
             'message' => 'Đã cập nhật biệt danh cuộc trò chuyện thành công.',
         ]);
     }
+
+    // --- Danh dau tin nhan da xem (Mark as Read) ---
+    public function markAsRead(Request $request, Conversation $conversation)
+    {
+        $user = Auth::user();
+        $participant = $conversation->participants()->where('user_id', $user->id)->first();
+        if (!$participant) {
+            return response()->json(['message' => 'Bạn không thuộc cuộc trò chuyện này.'], 403);
+        }
+
+        $messageId = $request->input('message_id');
+        if (!$messageId) {
+            $messageId = $conversation->messages()->latest('id')->value('id');
+        }
+
+        if ($messageId) {
+            $messageId = (int)$messageId;
+            $currentLastRead = (int)($participant->last_read_message_id ?? 0);
+
+            if ($messageId > $currentLastRead) {
+                $participant->last_read_message_id = $messageId;
+                $participant->last_read_at = now();
+                $participant->save();
+
+                broadcast(new \App\Events\MessageRead(
+                    $conversation->id,
+                    $user->id,
+                    $user->name,
+                    $user->avatar_url,
+                    $messageId,
+                    $participant->last_read_at->toIso8601String()
+                ))->toOthers();
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'last_read_message_id' => $participant->last_read_message_id,
+            'last_read_at' => $participant->last_read_at ? $participant->last_read_at->toIso8601String() : null,
+        ]);
+    }
 }
+
