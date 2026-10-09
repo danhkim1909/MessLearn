@@ -14,6 +14,23 @@
     // Kien truc WebRTC Full-Mesh
     let peers = {}; // key: remoteUserId -> RTCPeerConnection
     let remoteStreams = {}; // key: remoteUserId -> MediaStream
+    window.peers = peers;
+    window.remoteStreams = remoteStreams;
+    window.getWebrtcStatus = () => ({
+        roomCode: activeRoomCode,
+        callType: activeCallType,
+        hasLocalStream: !!localStream,
+        peers: Object.keys(peers).map(id => ({
+            id: Number(id),
+            connectionState: peers[id].connectionState,
+            iceConnectionState: peers[id].iceConnectionState,
+            signalingState: peers[id].signalingState
+        })),
+        remoteStreams: Object.keys(remoteStreams).map(id => ({
+            id: Number(id),
+            tracks: remoteStreams[id].getTracks().map(t => `${t.kind}:${t.readyState}:${t.enabled}`)
+        }))
+    });
     let remoteUserProfiles = {}; // key: remoteUserId -> { name, avatar }
     let remoteUserStates = {}; // key: remoteUserId -> { isMutedAudio, isMutedVideo, isHandRaised, isSharingScreen }
     let pendingIceCandidates = {}; // key: remoteUserId -> Array[RTCIceCandidate]
@@ -66,7 +83,8 @@
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' }
-        ]
+        ],
+        sdpSemantics: 'unified-plan'
     };
 
     function ensureConversationEchoSubscribed(convId) {
@@ -1292,7 +1310,32 @@
                 }
             }
 
-            await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+            // Chuan hoa chuoi SDP: Dam bao ngat dong CRLF (\r\n) va dong cuoi luon co \r\n theo chuan RFC
+            const rawOfferSdp = (typeof sdp === 'object' && sdp.sdp) ? sdp.sdp : sdp;
+            const offerType = (typeof sdp === 'object' && sdp.type) ? sdp.type : 'offer';
+            const formattedOfferSdp = String(rawOfferSdp).replace(/\r?\n/g, '\r\n').trimEnd() + '\r\n';
+
+            try {
+                await pc.setRemoteDescription(new RTCSessionDescription({
+                    type: offerType,
+                    sdp: formattedOfferSdp
+                }));
+                console.log(`[WebRTC] Set Remote Offer thanh cong tu peer ${sId}`);
+            } catch (sdpErr) {
+                console.warn(`[WebRTC] Nap Offer goc that bai (${sdpErr.message}), tien hanh loc bo dong ssrc msid loi theo chuan Unified Plan...`);
+                // Loc bo cac dong a=ssrc:... msid:... loi/khong hop le
+                const sanitizedOfferSdp = formattedOfferSdp
+                    .split(/\r?\n/)
+                    .filter(line => !line.match(/^a=ssrc:\d+\s+msid:/))
+                    .join('\r\n')
+                    .trimEnd() + '\r\n';
+
+                await pc.setRemoteDescription(new RTCSessionDescription({
+                    type: offerType,
+                    sdp: sanitizedOfferSdp
+                }));
+                console.log(`[WebRTC] Set Remote Offer (Sanitized) thanh cong tu peer ${sId}!`);
+            }
             await drainPendingIceCandidates(sId);
 
             const answer = await pc.createAnswer();
@@ -1310,7 +1353,31 @@
         if (!pc) return;
 
         try {
-            await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+            // Chuan hoa chuoi SDP Answer: Dam bao ngat dong CRLF (\r\n) va dong cuoi luon co \r\n theo chuan RFC
+            const rawAnswerSdp = (typeof sdp === 'object' && sdp.sdp) ? sdp.sdp : sdp;
+            const answerType = (typeof sdp === 'object' && sdp.type) ? sdp.type : 'answer';
+            const formattedAnswerSdp = String(rawAnswerSdp).replace(/\r?\n/g, '\r\n').trimEnd() + '\r\n';
+
+            try {
+                await pc.setRemoteDescription(new RTCSessionDescription({
+                    type: answerType,
+                    sdp: formattedAnswerSdp
+                }));
+                console.log(`[WebRTC] Set Remote Answer thanh cong tu peer ${sId}`);
+            } catch (sdpErr) {
+                console.warn(`[WebRTC] Nap Answer goc that bai (${sdpErr.message}), tien hanh loc bo dong ssrc msid loi theo chuan Unified Plan...`);
+                const sanitizedAnswerSdp = formattedAnswerSdp
+                    .split(/\r?\n/)
+                    .filter(line => !line.match(/^a=ssrc:\d+\s+msid:/))
+                    .join('\r\n')
+                    .trimEnd() + '\r\n';
+
+                await pc.setRemoteDescription(new RTCSessionDescription({
+                    type: answerType,
+                    sdp: sanitizedAnswerSdp
+                }));
+                console.log(`[WebRTC] Set Remote Answer (Sanitized) thanh cong tu peer ${sId}!`);
+            }
             await drainPendingIceCandidates(sId);
         } catch (err) {
             console.error(`Loi xu ly Answer tu peer ${sId}:`, err);

@@ -17,6 +17,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'app/conversation/*/meeting/leave',
         ]);
+        $middleware->trimStrings(except: [
+            'payload',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
