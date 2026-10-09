@@ -541,7 +541,9 @@
                 fallbackEl.classList.remove('hidden');
             } else {
                 const hasLiveVideoTrack = stream && stream.getVideoTracks && stream.getVideoTracks().some(t => t.readyState === 'live');
-                const shouldShowVideo = stream && (activeCallType === 'video' || hasLiveVideoTrack) && !userState.isMutedVideo;
+                const isRemoteVideoAllowed = !userState.isMutedVideo;
+                // Chi hien thi the video khi thuc su co track dang phat (live) va nguoi dung khong tat camera
+                const shouldShowVideo = Boolean(stream && hasLiveVideoTrack && isRemoteVideoAllowed);
 
                 if (shouldShowVideo) {
                     if (videoEl.srcObject !== stream) {
@@ -561,6 +563,10 @@
                 } else {
                     videoEl.classList.add('hidden');
                     fallbackEl.classList.remove('hidden');
+                    if (videoEl.srcObject) {
+                        videoEl.pause();
+                        videoEl.srcObject = null;
+                    }
                 }
             }
         }
@@ -1269,8 +1275,8 @@
         }
     }
 
-    // Tao va gui Offer toi nguoi dung cu the
-    async function createAndSendOffer(remoteUserId) {
+    // Tao va gui Offer toi nguoi dung cu the (ho tro force tai dam phan khi them track)
+    async function createAndSendOffer(remoteUserId, force = false) {
         const rId = Number(remoteUserId);
         const pc = getOrCreatePeerConnection(rId);
         if (!pc) return;
@@ -1281,8 +1287,8 @@
             return;
         }
 
-        // Neu da connected va khong can nang cap screen stream thi khong tao lai
-        if (pc.connectionState === 'connected' && !isSharingScreen) {
+        // Neu da connected va khong phai cuoc goi bat buoc (force / chia se man hinh) thi khong tao lai
+        if (pc.connectionState === 'connected' && !isSharingScreen && !force) {
             return;
         }
 
@@ -1457,6 +1463,17 @@
     // --- Dieu khien Camera & Nang cap linh hoat sang Video Call tren toan Mesh ---
     window.toggleCamera = async function() {
         if (!localStream) return;
+
+        if (isSharingScreen) {
+            if (typeof Toastify === 'function') {
+                Toastify({ 
+                    text: 'Bạn đang chia sẻ màn hình. Vui lòng tắt chia sẻ trước khi dùng Camera.', 
+                    style: { background: '#f59e0b', borderRadius: '0.5rem' } 
+                }).showToast();
+            }
+            return;
+        }
+
         let videoTrack = localStream.getVideoTracks()[0];
 
         if (!videoTrack) {
@@ -1478,7 +1495,7 @@
                         await sender.replaceTrack(videoTrack);
                     } else {
                         pc.addTrack(videoTrack, localStream);
-                        await createAndSendOffer(peerId);
+                        await createAndSendOffer(peerId, true);
                     }
                 }
 
@@ -1550,6 +1567,12 @@
             currentScreenSharerId = currentUserId;
             currentScreenSharerName = currentUserName;
 
+            // Tam tat camera tren thiet bi cua ben share de ho thay ro camera da tat
+            if (currentVideoTrack) {
+                currentVideoTrack.enabled = false;
+            }
+            isMutedVideo = true;
+
             const screenTrack = screenStream.getVideoTracks()[0];
             if (screenTrack) {
                 screenTrack.contentHint = 'detail';
@@ -1568,7 +1591,7 @@
                     await sender.replaceTrack(screenTrack);
                 } else {
                     pc.addTrack(screenTrack, screenStream);
-                    await createAndSendOffer(peerId);
+                    await createAndSendOffer(peerId, true);
                 }
             }
 
@@ -1603,13 +1626,22 @@
 
             if (typeof Toastify === 'function') {
                 Toastify({
-                    text: 'Bạn đang chia sẻ màn hình.',
+                    text: wasCameraActiveBeforeScreenShare 
+                        ? 'Bạn đang chia sẻ màn hình (Camera của bạn đã tạm tắt).' 
+                        : 'Bạn đang chia sẻ màn hình.',
                     style: { background: '#0284c7', borderRadius: '0.5rem' }
                 }).showToast();
             }
         } catch (err) {
             console.error('Loi chia se man hinh:', err);
             isSharingScreen = false;
+            // Neu user bam Huy chia se tren popup trinh duyet, khoi phuc lai camera neu truoc do co bat
+            if (wasCameraActiveBeforeScreenShare) {
+                const currentVideoTrack = localStream?.getVideoTracks()[0];
+                if (currentVideoTrack) currentVideoTrack.enabled = true;
+                isMutedVideo = false;
+            }
+            updateMediaControlsUI();
         }
     }
 
@@ -1628,6 +1660,13 @@
         // Khoi phuc camera cu tren tat ca cac Peer trong Mesh
         const videoTrack = localStream?.getVideoTracks()[0];
         const restoreTrack = (wasCameraActiveBeforeScreenShare && videoTrack) ? videoTrack : null;
+
+        if (restoreTrack) {
+            isMutedVideo = false;
+            restoreTrack.enabled = true;
+        } else {
+            isMutedVideo = true;
+        }
 
         for (const peerId in peers) {
             const pc = peers[peerId];
@@ -1648,6 +1687,18 @@
         updateMediaControlsUI();
         if (notifySignal) {
             sendSignal('screen_share_stopped', { sharerId: currentUserId });
+            sendSignal('media_state_changed', { 
+                isMutedAudio, 
+                isMutedVideo, 
+                isSharingScreen: false 
+            });
+        }
+
+        if (typeof Toastify === 'function') {
+            Toastify({
+                text: restoreTrack ? 'Đã dừng chia sẻ màn hình. Camera đã được bật lại.' : 'Đã dừng chia sẻ màn hình.',
+                style: { background: '#0ea5e9', borderRadius: '0.5rem' }
+            }).showToast();
         }
     };
 
@@ -1794,7 +1845,7 @@
 
         if (localVideo) {
             localVideo.srcObject = stream;
-            if (activeCallType === 'voice' || isMutedVideo) {
+            if (activeCallType === 'voice' || isMutedVideo || isSharingScreen) {
                 localVideo.classList.add('hidden');
                 if (localFallback) localFallback.classList.remove('hidden');
             } else {
@@ -1825,18 +1876,35 @@
         const iconCam = document.getElementById('icon-call-cam');
         const localVideo = document.getElementById('local-video');
         const localFallback = document.getElementById('local-video-fallback');
+        const localFallbackText = document.querySelector('#local-video-fallback p');
 
         if (btnCam && iconCam) {
-            if (isMutedVideo) {
-                btnCam.className = 'w-11 h-11 rounded-full bg-rose-600 text-white flex items-center justify-center transition-all active:scale-95';
+            if (isSharingScreen) {
+                btnCam.disabled = true;
+                btnCam.className = 'w-11 h-11 rounded-full bg-rose-600/70 text-white/80 opacity-70 cursor-not-allowed flex items-center justify-center transition-all';
                 iconCam.setAttribute('data-lucide', 'video-off');
+                btnCam.title = 'Camera tạm tắt khi chia sẻ màn hình';
+
+                // Ben share cung thay ro rang camera cua minh bi tat:
                 if (localVideo) localVideo.classList.add('hidden');
                 if (localFallback) localFallback.classList.remove('hidden');
+                if (localFallbackText) localFallbackText.innerText = 'Bạn (Camera tạm tắt do chia sẻ màn hình)';
             } else {
-                btnCam.className = 'w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all active:scale-95';
-                iconCam.setAttribute('data-lucide', 'video');
-                if (localVideo) localVideo.classList.remove('hidden');
-                if (localFallback) localFallback.classList.add('hidden');
+                btnCam.disabled = false;
+                btnCam.removeAttribute('title');
+                if (localFallbackText) localFallbackText.innerText = 'Bạn (Camera đang tắt)';
+
+                if (isMutedVideo) {
+                    btnCam.className = 'w-11 h-11 rounded-full bg-rose-600 text-white flex items-center justify-center transition-all active:scale-95';
+                    iconCam.setAttribute('data-lucide', 'video-off');
+                    if (localVideo) localVideo.classList.add('hidden');
+                    if (localFallback) localFallback.classList.remove('hidden');
+                } else {
+                    btnCam.className = 'w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all active:scale-95';
+                    iconCam.setAttribute('data-lucide', 'video');
+                    if (localVideo) localVideo.classList.remove('hidden');
+                    if (localFallback) localFallback.classList.add('hidden');
+                }
             }
         }
 
