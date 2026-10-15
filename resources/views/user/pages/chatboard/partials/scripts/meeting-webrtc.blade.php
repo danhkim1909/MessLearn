@@ -60,6 +60,16 @@
         let preCallMutedAudio = false;
         let preCallMutedVideo = false;
 
+        // Quan ly thiet bi chuyen doi dong (Device Switcher)
+        let currentAudioInputId = null;
+        let currentAudioOutputId = null;
+        let currentVideoInputId = null;
+        let availableDevices = {
+            audioInputs: [],
+            audioOutputs: [],
+            videoInputs: []
+        };
+
         // Trang thai phong cho phong hoc nhom (Meeting Lobby)
         let lobbyPreviewStream = null;
         let lobbyMutedAudio = false;
@@ -82,7 +92,6 @@
 
         const rtcConfig = {
             iceServers: [
-                // STUN Google: Uu tien noi truc tiep neu cung mang
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
 
@@ -245,8 +254,9 @@
             try {
                 // Yeu cau quyen truy cap Micro va Camera
                 const constraints = {
-                    audio: true,
+                    audio: currentAudioInputId ? { deviceId: { exact: currentAudioInputId } } : true,
                     video: type === 'video' ? {
+                        ...(currentVideoInputId ? { deviceId: { exact: currentVideoInputId } } : {}),
                         width: {
                             ideal: 1280
                         },
@@ -257,6 +267,19 @@
                 };
 
                 localStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+                // Nhan dien ID thiet bi phan cung dang thuc su duoc su dung
+                const activeAudioTrack = localStream.getAudioTracks()[0];
+                if (activeAudioTrack && activeAudioTrack.getSettings) {
+                    const s = activeAudioTrack.getSettings();
+                    if (s.deviceId) currentAudioInputId = s.deviceId;
+                }
+                const activeVideoTrack = localStream.getVideoTracks()[0];
+                if (activeVideoTrack && activeVideoTrack.getSettings) {
+                    const s = activeVideoTrack.getSettings();
+                    if (s.deviceId) currentVideoInputId = s.deviceId;
+                }
+                updateDeviceList().catch(e => console.warn('Loi khoi tao danh sach thiet bi:', e));
 
                 // Ap dung tuy chon Mic/Cam neu co truyen tu Phong cho (Meeting Lobby)
                 if (initialMediaOptions) {
@@ -604,6 +627,9 @@
             if (audioEl && stream) {
                 if (audioEl.srcObject !== stream) {
                     audioEl.srcObject = stream;
+                }
+                if (currentAudioOutputId && typeof audioEl.setSinkId === 'function') {
+                    audioEl.setSinkId(currentAudioOutputId).catch(e => console.warn('setSinkId peer error:', e));
                 }
                 audioEl.play().catch(e => console.warn('Audio play blocked:', e));
             }
@@ -1092,8 +1118,9 @@
 
             try {
                 const constraints = {
-                    audio: true,
+                    audio: currentAudioInputId ? { deviceId: { exact: currentAudioInputId } } : true,
                     video: activeCallType === 'video' ? {
+                        ...(currentVideoInputId ? { deviceId: { exact: currentVideoInputId } } : {}),
                         width: {
                             ideal: 1280
                         },
@@ -1104,6 +1131,19 @@
                 };
 
                 localStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+                // Nhan dien ID thiet bi phan cung dang thuc su duoc su dung
+                const activeAudioTrack = localStream.getAudioTracks()[0];
+                if (activeAudioTrack && activeAudioTrack.getSettings) {
+                    const s = activeAudioTrack.getSettings();
+                    if (s.deviceId) currentAudioInputId = s.deviceId;
+                }
+                const activeVideoTrack = localStream.getVideoTracks()[0];
+                if (activeVideoTrack && activeVideoTrack.getSettings) {
+                    const s = activeVideoTrack.getSettings();
+                    if (s.deviceId) currentVideoInputId = s.deviceId;
+                }
+                updateDeviceList().catch(e => console.warn('Loi khoi tao danh sach thiet bi:', e));
 
                 isMutedAudio = preCallMutedAudio;
                 const audioTrack = localStream.getAudioTracks()[0];
@@ -2009,6 +2049,7 @@
             isMeetingHost = false;
             currentHostUserId = null;
             isHandRaised = false;
+            closeDeviceMenus();
             closeHostLeaveConfirmModal();
             updateMeetingRoleUI();
 
@@ -2544,7 +2585,419 @@
             }
         };
 
-        // --- Lang nghe su kien qua Laravel Reverb ---
+        // -------------------------------------------------------------
+        // DEVICE SWITCHER ENGINE (MICROPHONE, SPEAKER, CAMERA)
+        // NANG CAP CHUYEN DOI THIET BI DONG CHUAN GOOGLE MEET / ZOOM
+        // -------------------------------------------------------------
+
+        window.toggleAudioDeviceMenu = function(e) {
+            if (e) e.stopPropagation();
+            const menuAudio = document.getElementById('menu-audio-devices');
+            const menuVideo = document.getElementById('menu-video-devices');
+            const iconAudio = document.getElementById('icon-audio-chevron');
+            const iconVideo = document.getElementById('icon-video-chevron');
+
+            if (menuVideo) menuVideo.classList.add('hidden');
+            if (iconVideo) iconVideo.classList.remove('rotate-180');
+
+            if (menuAudio) {
+                const willOpen = menuAudio.classList.contains('hidden');
+                menuAudio.classList.toggle('hidden');
+                if (iconAudio) {
+                    iconAudio.classList.toggle('rotate-180', willOpen);
+                }
+                if (willOpen) {
+                    updateDeviceList();
+                }
+            }
+        };
+
+        window.toggleVideoDeviceMenu = function(e) {
+            if (e) e.stopPropagation();
+            const menuAudio = document.getElementById('menu-audio-devices');
+            const menuVideo = document.getElementById('menu-video-devices');
+            const iconAudio = document.getElementById('icon-audio-chevron');
+            const iconVideo = document.getElementById('icon-video-chevron');
+
+            if (menuAudio) menuAudio.classList.add('hidden');
+            if (iconAudio) iconAudio.classList.remove('rotate-180');
+
+            if (menuVideo) {
+                const willOpen = menuVideo.classList.contains('hidden');
+                menuVideo.classList.toggle('hidden');
+                if (iconVideo) {
+                    iconVideo.classList.toggle('rotate-180', willOpen);
+                }
+                if (willOpen) {
+                    updateDeviceList();
+                }
+            }
+        };
+
+        function closeDeviceMenus() {
+            const menuAudio = document.getElementById('menu-audio-devices');
+            const menuVideo = document.getElementById('menu-video-devices');
+            const iconAudio = document.getElementById('icon-audio-chevron');
+            const iconVideo = document.getElementById('icon-video-chevron');
+
+            if (menuAudio) menuAudio.classList.add('hidden');
+            if (menuVideo) menuVideo.classList.add('hidden');
+            if (iconAudio) iconAudio.classList.remove('rotate-180');
+            if (iconVideo) iconVideo.classList.remove('rotate-180');
+        }
+
+        // Dong dropdown khi nguoi dung nhan ra ngoai menu
+        document.addEventListener('click', (e) => {
+            const menuAudio = document.getElementById('menu-audio-devices');
+            const menuVideo = document.getElementById('menu-video-devices');
+            const btnAudio = document.getElementById('btn-toggle-audio-menu');
+            const btnVideo = document.getElementById('btn-toggle-video-menu');
+
+            if (menuAudio && !menuAudio.classList.contains('hidden')) {
+                if (!menuAudio.contains(e.target) && !btnAudio?.contains(e.target)) {
+                    menuAudio.classList.add('hidden');
+                    const iconAudio = document.getElementById('icon-audio-chevron');
+                    if (iconAudio) iconAudio.classList.remove('rotate-180');
+                }
+            }
+            if (menuVideo && !menuVideo.classList.contains('hidden')) {
+                if (!menuVideo.contains(e.target) && !btnVideo?.contains(e.target)) {
+                    menuVideo.classList.add('hidden');
+                    const iconVideo = document.getElementById('icon-video-chevron');
+                    if (iconVideo) iconVideo.classList.remove('rotate-180');
+                }
+            }
+        });
+
+        // Quet va render danh sach thiet bi hien tai
+        async function updateDeviceList() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+                console.warn('[WebRTC] enumerateDevices khong duoc ho tro tren trinh duyet nay.');
+                return;
+            }
+
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                availableDevices.audioInputs = devices.filter(d => d.kind === 'audioinput');
+                availableDevices.audioOutputs = devices.filter(d => d.kind === 'audiooutput');
+                availableDevices.videoInputs = devices.filter(d => d.kind === 'videoinput');
+
+                // Lay deviceId dang dung tu localStream neu chua co
+                if (!currentAudioInputId && localStream) {
+                    const aTrack = localStream.getAudioTracks()[0];
+                    if (aTrack && aTrack.getSettings) {
+                        currentAudioInputId = aTrack.getSettings().deviceId || null;
+                    }
+                }
+                if (!currentAudioInputId && availableDevices.audioInputs.length > 0) {
+                    currentAudioInputId = availableDevices.audioInputs[0].deviceId;
+                }
+
+                if (!currentVideoInputId && localStream) {
+                    const vTrack = localStream.getVideoTracks()[0];
+                    if (vTrack && vTrack.getSettings) {
+                        currentVideoInputId = vTrack.getSettings().deviceId || null;
+                    }
+                }
+                if (!currentVideoInputId && availableDevices.videoInputs.length > 0) {
+                    currentVideoInputId = availableDevices.videoInputs[0].deviceId;
+                }
+
+                // 1. Render danh sach Microphone
+                const audioInputContainer = document.getElementById('audio-input-device-list');
+                if (audioInputContainer) {
+                    if (availableDevices.audioInputs.length === 0) {
+                        audioInputContainer.innerHTML = '<div class="px-2 py-1.5 text-xs text-slate-400">Không tìm thấy microphone</div>';
+                    } else {
+                        audioInputContainer.innerHTML = availableDevices.audioInputs.map((d, idx) => {
+                            const isSelected = d.deviceId === currentAudioInputId || (!currentAudioInputId && idx === 0);
+                            const label = d.label || `Microphone ${idx + 1}`;
+                            return `
+                                <button type="button" onclick="selectAudioInputDevice('${d.deviceId}')"
+                                        class="w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between transition-colors ${isSelected ? 'bg-sky-500/15 text-sky-400 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}">
+                                    <span class="truncate pr-2">${label}</span>
+                                    ${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 shrink-0 text-sky-400"></i>' : ''}
+                                </button>
+                            `;
+                        }).join('');
+                    }
+                }
+
+                // 2. Render danh sach Loa / Tai nghe
+                const audioOutputContainer = document.getElementById('audio-output-device-list');
+                const unsupportedNote = document.getElementById('audio-output-unsupported-note');
+                const isSinkIdSupported = ('setSinkId' in HTMLMediaElement.prototype);
+
+                if (unsupportedNote) {
+                    unsupportedNote.classList.toggle('hidden', isSinkIdSupported);
+                }
+
+                if (audioOutputContainer) {
+                    if (!isSinkIdSupported) {
+                        audioOutputContainer.innerHTML = '<div class="px-2 py-1 text-xs text-slate-400 italic">Đang dùng đầu ra mặc định của hệ thống</div>';
+                    } else if (availableDevices.audioOutputs.length === 0) {
+                        audioOutputContainer.innerHTML = '<div class="px-2 py-1.5 text-xs text-slate-400">Không tìm thấy loa / tai nghe</div>';
+                    } else {
+                        if (!currentAudioOutputId && availableDevices.audioOutputs.length > 0) {
+                            currentAudioOutputId = availableDevices.audioOutputs[0].deviceId;
+                        }
+                        audioOutputContainer.innerHTML = availableDevices.audioOutputs.map((d, idx) => {
+                            const isSelected = d.deviceId === currentAudioOutputId || (!currentAudioOutputId && idx === 0);
+                            const label = d.label || `Loa / Tai nghe ${idx + 1}`;
+                            return `
+                                <button type="button" onclick="selectAudioOutputDevice('${d.deviceId}')"
+                                        class="w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between transition-colors ${isSelected ? 'bg-emerald-500/15 text-emerald-400 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}">
+                                    <span class="truncate pr-2">${label}</span>
+                                    ${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 shrink-0 text-emerald-400"></i>' : ''}
+                                </button>
+                            `;
+                        }).join('');
+                    }
+                }
+
+                // 3. Render danh sach Camera
+                const videoInputContainer = document.getElementById('video-input-device-list');
+                if (videoInputContainer) {
+                    if (availableDevices.videoInputs.length === 0) {
+                        videoInputContainer.innerHTML = '<div class="px-2 py-1.5 text-xs text-slate-400">Không tìm thấy camera</div>';
+                    } else {
+                        videoInputContainer.innerHTML = availableDevices.videoInputs.map((d, idx) => {
+                            const isSelected = d.deviceId === currentVideoInputId || (!currentVideoInputId && idx === 0);
+                            const label = d.label || `Camera ${idx + 1}`;
+                            return `
+                                <button type="button" onclick="selectVideoInputDevice('${d.deviceId}')"
+                                        class="w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between transition-colors ${isSelected ? 'bg-indigo-500/15 text-indigo-400 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}">
+                                    <span class="truncate pr-2">${label}</span>
+                                    ${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 shrink-0 text-indigo-400"></i>' : ''}
+                                </button>
+                            `;
+                        }).join('');
+                    }
+                }
+
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    lucide.createIcons();
+                }
+            } catch (err) {
+                console.error('[WebRTC] Loi khi liet ke thiet bi:', err);
+            }
+        }
+
+        // Chuyen doi Microphone khong gian doan qua RTCRtpSender.replaceTrack()
+        window.selectAudioInputDevice = async function(deviceId) {
+            if (!deviceId) return;
+            if (deviceId === currentAudioInputId) {
+                closeDeviceMenus();
+                return;
+            }
+
+            try {
+                const newStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { deviceId: { exact: deviceId } }
+                });
+                const newAudioTrack = newStream.getAudioTracks()[0];
+                if (!newAudioTrack) throw new Error('Không thể khởi tạo luồng âm thanh mới');
+
+                // Bao toan trang thai Tắt / Bật Mic
+                newAudioTrack.enabled = !isMutedAudio;
+
+                // Hoan doi track mượt mà tren tat ca cac PeerConnection trong Full-Mesh (khong renegotiation)
+                for (const peerId in peers) {
+                    const pc = peers[peerId];
+                    const sender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
+                    if (sender) {
+                        await sender.replaceTrack(newAudioTrack);
+                    }
+                }
+
+                // Cap nhat localStream va giai phong track phan cung cu
+                if (localStream) {
+                    const oldAudioTrack = localStream.getAudioTracks()[0];
+                    if (oldAudioTrack) {
+                        localStream.removeTrack(oldAudioTrack);
+                        oldAudioTrack.stop();
+                    }
+                    localStream.addTrack(newAudioTrack);
+                }
+
+                currentAudioInputId = deviceId;
+                closeDeviceMenus();
+                updateDeviceList();
+
+                if (typeof Toastify === 'function') {
+                    Toastify({
+                        text: 'Đã chuyển sang Microphone mới.',
+                        style: { background: '#0284c7', borderRadius: '0.5rem' },
+                        duration: 2500
+                    }).showToast();
+                }
+            } catch (err) {
+                console.error('[WebRTC] Loi khi chuyen microphone:', err);
+                if (typeof Toastify === 'function') {
+                    Toastify({
+                        text: 'Không thể chuyển đổi Microphone. Vui lòng kiểm tra quyền thiết bị.',
+                        style: { background: '#f43f5e', borderRadius: '0.5rem' },
+                        duration: 3500
+                    }).showToast();
+                }
+            }
+        };
+
+        // Chuyen doi Loa / Tai nghe bang HTMLMediaElement.setSinkId()
+        window.selectAudioOutputDevice = async function(deviceId) {
+            if (!deviceId) return;
+            if (!('setSinkId' in HTMLMediaElement.prototype)) {
+                if (typeof Toastify === 'function') {
+                    Toastify({
+                        text: 'Trình duyệt này không hỗ trợ đổi loa trực tiếp. Vui lòng chọn trong cài đặt hệ điều hành.',
+                        style: { background: '#f59e0b', borderRadius: '0.5rem' },
+                        duration: 4000
+                    }).showToast();
+                }
+                closeDeviceMenus();
+                return;
+            }
+
+            try {
+                // Gan sinkId cho the remote-audio tong
+                const remoteAudio = document.getElementById('remote-audio');
+                if (remoteAudio && typeof remoteAudio.setSinkId === 'function') {
+                    await remoteAudio.setSinkId(deviceId);
+                }
+
+                // Gan sinkId cho tat ca the audio va video cua tung peer
+                const audioEls = document.querySelectorAll('audio[id^="remote-audio-"], video[id^="remote-video-"]');
+                for (const el of audioEls) {
+                    if (el && typeof el.setSinkId === 'function') {
+                        try {
+                            await el.setSinkId(deviceId);
+                        } catch (e) {
+                            console.warn('Loi setSinkId tren peer element:', el.id, e);
+                        }
+                    }
+                }
+
+                currentAudioOutputId = deviceId;
+                closeDeviceMenus();
+                updateDeviceList();
+
+                if (typeof Toastify === 'function') {
+                    Toastify({
+                        text: 'Đã chuyển đổi Loa / Tai nghe thành công.',
+                        style: { background: '#059669', borderRadius: '0.5rem' },
+                        duration: 2500
+                    }).showToast();
+                }
+            } catch (err) {
+                console.error('[WebRTC] Loi khi chuyen doi loa:', err);
+                if (typeof Toastify === 'function') {
+                    Toastify({
+                        text: 'Không thể chuyển Loa/Tai nghe.',
+                        style: { background: '#f43f5e', borderRadius: '0.5rem' },
+                        duration: 3500
+                    }).showToast();
+                }
+            }
+        };
+
+        // Chuyen doi Camera khong gian doan qua RTCRtpSender.replaceTrack()
+        window.selectVideoInputDevice = async function(deviceId) {
+            if (!deviceId) return;
+            if (deviceId === currentVideoInputId && localStream?.getVideoTracks()?.length > 0) {
+                closeDeviceMenus();
+                return;
+            }
+
+            try {
+                const newStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        deviceId: { exact: deviceId },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+                const newVideoTrack = newStream.getVideoTracks()[0];
+                if (!newVideoTrack) throw new Error('Không thể khởi tạo luồng camera mới');
+
+                // Bao toan trang thai Tắt / Bật Camera
+                newVideoTrack.enabled = !isMutedVideo;
+
+                // Tuong thich tinh nang Chia se man hinh:
+                // Neu dang chia se man hinh, KHONG duoc replaceTrack de tranh de mat luong man hinh may tinh!
+                if (isSharingScreen) {
+                    if (localStream) {
+                        const oldVideoTrack = localStream.getVideoTracks()[0];
+                        if (oldVideoTrack) {
+                            localStream.removeTrack(oldVideoTrack);
+                            oldVideoTrack.stop();
+                        }
+                        localStream.addTrack(newVideoTrack);
+                    }
+                } else {
+                    // Neu khong chia se man hinh: Hoan doi track tren toan bo cac PeerConnection trong Mesh
+                    for (const peerId in peers) {
+                        const pc = peers[peerId];
+                        const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                        if (sender) {
+                            await sender.replaceTrack(newVideoTrack);
+                        } else {
+                            pc.addTrack(newVideoTrack, localStream);
+                            await createAndSendOffer(peerId, true);
+                        }
+                    }
+
+                    if (localStream) {
+                        const oldVideoTrack = localStream.getVideoTracks()[0];
+                        if (oldVideoTrack) {
+                            localStream.removeTrack(oldVideoTrack);
+                            oldVideoTrack.stop();
+                        }
+                        localStream.addTrack(newVideoTrack);
+                    }
+
+                    activeCallType = 'video';
+                    attachLocalMediaStream(localStream);
+                }
+
+                currentVideoInputId = deviceId;
+                closeDeviceMenus();
+                updateDeviceList();
+
+                if (typeof Toastify === 'function') {
+                    Toastify({
+                        text: isSharingScreen ?
+                            'Đã chọn Camera mới (sẽ áp dụng khi bạn dừng chia sẻ màn hình).' :
+                            'Đã chuyển sang Camera mới.',
+                        style: { background: '#0284c7', borderRadius: '0.5rem' },
+                        duration: 3000
+                    }).showToast();
+                }
+            } catch (err) {
+                console.error('[WebRTC] Loi khi chuyen camera:', err);
+                if (typeof Toastify === 'function') {
+                    Toastify({
+                        text: 'Không thể chuyển đổi Camera. Vui lòng kiểm tra quyền thiết bị.',
+                        style: { background: '#f43f5e', borderRadius: '0.5rem' },
+                        duration: 3500
+                    }).showToast();
+                }
+            }
+        };
+
+        // Lang nghe su kien cam / rut thiet bi ngoai vi (Hot-plugging)
+        if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {
+            navigator.mediaDevices.addEventListener('devicechange', async () => {
+                console.log('[WebRTC] Phat hien thiet bi am thanh / camera vua cam hoac rut.');
+                await updateDeviceList();
+                if (typeof Toastify === 'function' && localStream) {
+                    Toastify({
+                        text: 'Đã cập nhật danh sách thiết bị âm thanh & camera.',
+                        style: { background: '#334155', borderRadius: '0.5rem' },
+                        duration: 2500
+                    }).showToast();
+                }
+            });
+        }
         document.addEventListener('DOMContentLoaded', () => {
             if (typeof window.Echo === 'undefined') return;
 

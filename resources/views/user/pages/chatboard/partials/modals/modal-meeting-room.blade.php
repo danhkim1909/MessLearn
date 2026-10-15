@@ -109,19 +109,80 @@
     <!-- Thanh cong cu dieu khien lo lung day phong (Floating Pill Control Bar) -->
     <div class="h-20 flex items-center justify-center shrink-0 z-30 pb-2">
         <div id="meeting-controls-bar" class="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-full px-6 py-3 flex items-center gap-4 shadow-2xl">
-            <!-- Bat / Tat Micro -->
-            <button type="button" id="btn-call-mic" onclick="toggleMicrophone()" 
-                    class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all active:scale-95" 
-                    title="Bật / Tắt Micro">
-                <i data-lucide="mic" id="icon-call-mic" class="w-5 h-5"></i>
-            </button>
+            <!-- Nhom dieu khien Micro & Loa -->
+            <div class="relative flex items-center">
+                <div class="flex items-center bg-slate-800/80 rounded-full border border-slate-700/60 p-0.5">
+                    <button type="button" id="btn-call-mic" onclick="toggleMicrophone()" 
+                            class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all active:scale-95" 
+                            title="Bật / Tắt Micro">
+                        <i data-lucide="mic" id="icon-call-mic" class="w-5 h-5"></i>
+                    </button>
+                    <button type="button" id="btn-toggle-audio-menu" onclick="toggleAudioDeviceMenu(event)"
+                            class="h-11 w-6 rounded-r-full hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+                            title="Cài đặt Micro & Loa">
+                        <i data-lucide="chevron-up" id="icon-audio-chevron" class="w-3.5 h-3.5 transition-transform duration-200"></i>
+                    </button>
+                </div>
 
-            <!-- Bat / Tat Camera -->
-            <button type="button" id="btn-call-cam" onclick="toggleCamera()" 
-                    class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all active:scale-95" 
-                    title="Bật / Tắt Camera">
-                <i data-lucide="video" id="icon-call-cam" class="w-5 h-5"></i>
-            </button>
+                <!-- Menu Dropdown Popover Micro & Loa -->
+                <div id="menu-audio-devices" class="hidden absolute bottom-full mb-4 left-0 w-80 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl p-3 z-50 text-left space-y-3">
+                    <!-- Section: Micro -->
+                    <div>
+                        <div class="flex items-center gap-2 px-2 py-1 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
+                            <i data-lucide="mic" class="w-3.5 h-3.5 text-sky-400"></i>
+                            <span>Microphone</span>
+                        </div>
+                        <div id="audio-input-device-list" class="space-y-1 mt-1 max-h-40 overflow-y-auto">
+                            <div class="px-3 py-2 text-xs text-slate-400">Đang quét thiết bị...</div>
+                        </div>
+                    </div>
+
+                    <div class="w-full h-px bg-slate-800"></div>
+
+                    <!-- Section: Loa / Tai nghe -->
+                    <div>
+                        <div class="flex items-center gap-2 px-2 py-1 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
+                            <i data-lucide="volume-2" class="w-3.5 h-3.5 text-emerald-400"></i>
+                            <span>Loa / Tai nghe</span>
+                        </div>
+                        <div id="audio-output-device-list" class="space-y-1 mt-1 max-h-40 overflow-y-auto">
+                            <div class="px-3 py-2 text-xs text-slate-400">Đang quét thiết bị...</div>
+                        </div>
+                        <div id="audio-output-unsupported-note" class="hidden px-2 pt-1 text-[10px] text-slate-400 italic">
+                            * Trình duyệt này sử dụng đầu ra âm thanh mặc định của hệ thống.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Nhom dieu khien Camera -->
+            <div class="relative flex items-center">
+                <div class="flex items-center bg-slate-800/80 rounded-full border border-slate-700/60 p-0.5">
+                    <button type="button" id="btn-call-cam" onclick="toggleCamera()" 
+                            class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all active:scale-95" 
+                            title="Bật / Tắt Camera">
+                        <i data-lucide="video" id="icon-call-cam" class="w-5 h-5"></i>
+                    </button>
+                    <button type="button" id="btn-toggle-video-menu" onclick="toggleVideoDeviceMenu(event)"
+                            class="h-11 w-6 rounded-r-full hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+                            title="Cài đặt Camera">
+                        <i data-lucide="chevron-up" id="icon-video-chevron" class="w-3.5 h-3.5 transition-transform duration-200"></i>
+                    </button>
+                </div>
+
+                <!-- Menu Dropdown Popover Camera -->
+                <div id="menu-video-devices" class="hidden absolute bottom-full mb-4 left-0 w-80 bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl p-3 z-50 text-left space-y-3">
+                    <div>
+                        <div class="flex items-center gap-2 px-2 py-1 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
+                            <i data-lucide="video" class="w-3.5 h-3.5 text-indigo-400"></i>
+                            <span>Camera</span>
+                        </div>
+                        <div id="video-input-device-list" class="space-y-1 mt-1 max-h-48 overflow-y-auto">
+                            <div class="px-3 py-2 text-xs text-slate-400">Đang quét thiết bị...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Chia se man hinh -->
             <button type="button" id="btn-call-screen" onclick="toggleScreenShare()" 

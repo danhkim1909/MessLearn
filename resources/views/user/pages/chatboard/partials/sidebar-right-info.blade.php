@@ -15,7 +15,6 @@
 @endphp
 
 <aside id="sidebar-right-info" class="w-80 bg-slate-50 dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 flex flex-col shrink-0 overflow-y-auto transition-all duration-200">
-    <!-- Header của Panel thông tin -->
     <div class="h-16 px-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
         <h3 class="font-extrabold text-sm text-slate-900 dark:text-white uppercase tracking-wider">Thông tin hội thoại</h3>
         <button type="button" onclick="toggleRightSidebar()" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Đóng bảng thông tin">
@@ -23,7 +22,7 @@
         </button>
     </div>
 
-    <!-- Phân khu 1: Thẻ hồ sơ hội thoại (Profile Card) -->
+ 
     <div class="p-5 flex flex-col items-center text-center border-b border-slate-200/80 dark:border-slate-800 bg-white/60 dark:bg-slate-800/40">
         @if($isGroup)
             <div class="relative group/avatar">

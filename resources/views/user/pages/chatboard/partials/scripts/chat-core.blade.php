@@ -1,5 +1,4 @@
 <script>
-// Generic Modals & Friend / Group Management
 function openModal(id) {
     const modalEl = document.getElementById(id);
     if (!modalEl) return;
@@ -36,9 +35,6 @@ function closeModal(id) {
     }
 }
 
-// ---------------------------------------------------------
-// LOGIC MODAL: KET BAN (ADD FRIEND)
-// ---------------------------------------------------------
 let currentSearchedUser = null;
 
 function resetAddFriendModal() {
@@ -75,7 +71,7 @@ async function searchFriendByEmail() {
 
     if (!email) {
         if (msgEl) {
-            msgEl.innerText = 'Vui long nhap dia chi email can tim kiem.';
+            msgEl.innerText = 'Vui lòng nhập địa chỉ mail của bạn bè.';
             msgEl.className = 'text-xs text-center text-rose-500 block';
         }
         return;
@@ -145,7 +141,7 @@ function renderFriendResultCard(data) {
         badgeHtml = `
             <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 text-xs font-semibold">
                 <i data-lucide="user-check" class="w-4 h-4 text-sky-500"></i>
-                <span>Day la tai khoan cua ban</span>
+                <span>Đây là tài khoản của bạn</span>
             </div>
         `;
         actionHtml = '';
@@ -153,7 +149,7 @@ function renderFriendResultCard(data) {
         badgeHtml = `
             <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 text-xs font-semibold">
                 <i data-lucide="check-circle-2" class="w-4 h-4"></i>
-                <span>Da la ban be</span>
+                <span>Đã là bạn bè</span>
             </div>
         `;
         actionHtml = `
@@ -291,22 +287,22 @@ async function submitFriendRequest(friendId) {
             }
         } else {
             if (msgEl) {
-                msgEl.innerText = data.message || 'Loi khi gui loi moi.';
+                msgEl.innerText = data.message || 'Có lỗi khi gửi lời mời.';
                 msgEl.className = 'text-xs text-center text-rose-500 block';
             }
             if (btn) {
                 btn.disabled = false;
-                if (btnText) btnText.innerText = 'Gui loi moi ket ban';
+                if (btnText) btnText.innerText = 'Gửi lời mời kết bạn';
             }
         }
     } catch (err) {
         if (msgEl) {
-            msgEl.innerText = 'Loi ket noi toi may chu.';
+            msgEl.innerText = 'Lỗi kết nối máy chủ.';
             msgEl.className = 'text-xs text-center text-rose-500 block';
         }
         if (btn) {
             btn.disabled = false;
-            if (btnText) btnText.innerText = 'Gui loi moi ket ban';
+            if (btnText) btnText.innerText = 'Gửi lời mời kết bạn';
         }
     }
 }
@@ -331,7 +327,7 @@ async function acceptFriendFromModal(friendshipId) {
         const data = await res.json();
         if (res.ok && data.success) {
             if (typeof Toastify !== 'undefined') {
-                Toastify({ text: 'Da chap nhan ket ban thanh cong!', style: { background: '#10b981' } }).showToast();
+                Toastify({ text: 'Đã chấp nhận lời mời kết bạn!', style: { background: '#10b981' } }).showToast();
             }
             if (currentSearchedUser && currentSearchedUser.relationship) {
                 currentSearchedUser.relationship.status = 'friend';
@@ -340,12 +336,17 @@ async function acceptFriendFromModal(friendshipId) {
             const item = document.getElementById(`pending-request-item-${friendshipId}`);
             if (item) item.remove();
             updateSidebarPendingCount(-1);
+            if (data.redirect_url) {
+                setTimeout(() => {
+                    window.location.href = data.redirect_url;
+                }, 800);
+            }
         } else {
-            alert(data.message || 'Khong the chap nhan loi moi.');
+            alert(data.message || 'Lỗi kết nối khi chấp nhận lời mời kết bạn.');
             if (btn) btn.disabled = false;
         }
     } catch (err) {
-        alert('Loi ket noi khi chap nhan loi moi.');
+        alert('Lỗi kết nối khi chấp nhận lời mời kết bạn.');
         if (btn) btn.disabled = false;
     }
 }
@@ -612,7 +613,7 @@ function renderSelectedGroupChips() {
     if (count === 0) {
         chipsContainer.innerHTML = `
             <span id="group-selected-empty-text" class="text-xs text-slate-400 italic px-1 select-none">
-                Chua chon thanh vien nao...
+                Chưa chọn thành viên nào...
             </span>
         `;
         return;
@@ -1648,8 +1649,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         updateSidebarPendingCount(1);
                     }
                 } else if (e.action === 'request_accepted') {
+                    const convUrl = e.conversationId ? `/app/chat-board/${e.conversationId}` : null;
                     if (typeof Toastify !== 'undefined') {
-                        Toastify({ text: e.message || `${e.sender.name} đã đồng ý kết bạn!`, style: { background: '#10b981' }, duration: 4000 }).showToast();
+                        Toastify({ 
+                            text: (e.message || `${e.sender.name} đã đồng ý kết bạn!`) + (convUrl ? ' (Bấm để trò chuyện)' : ''), 
+                            style: { background: '#10b981' }, 
+                            duration: 6000,
+                            destination: convUrl || undefined,
+                            newWindow: false
+                        }).showToast();
                     }
                 } else if (e.action === 'request_canceled') {
                     const item = document.getElementById(`pending-request-item-${e.friendshipId}`);

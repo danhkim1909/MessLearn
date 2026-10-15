@@ -1,4 +1,3 @@
-<!-- CỘT 2: DANH SÁCH CUỘC TRÒ CHUYỆN -->
 <section class="w-80 bg-slate-50 dark:bg-slate-900/50 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0">
     <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
         <h2 class="font-extrabold text-lg text-slate-900 dark:text-white">Tin nhắn</h2>

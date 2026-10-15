@@ -3,15 +3,18 @@
 namespace App\Http\Controllers\User;
 
 use App\Events\FriendshipEvent;
+use App\Events\MessageSent;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Friendship;
+use App\Models\Message;
 use App\Models\User;
 use App\Models\UserBlock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class FriendshipController extends Controller
 {
@@ -64,7 +67,6 @@ class FriendshipController extends Controller
                         $status = 'friend';
                         $label = 'Đã là bạn bè';
 
-                        // Tim cuoc tro chuyen truc tiep 1-1 giua hai nguoi neu co
                         $directConv = Conversation::where('type', 'direct')
                             ->whereHas('participants', function ($q) use ($currentUserId) {
                                 $q->where('user_id', $currentUserId);
@@ -186,9 +188,70 @@ class FriendshipController extends Controller
 
             $friendship->update(['status' => 'accepted']);
 
-            // Phat su kien Reverb toi nguoi gui loi moi ban dau
+            $currentUserId = Auth::id();
+            $senderUserId = (int)$friendship->user_id;
+
+            // Tìm cuộc trò chuyện 1-1 (direct) đã tồn tại giữa hai người
+            $conversation = Conversation::where('type', 'direct')
+                ->whereHas('participants', function ($q) use ($currentUserId) {
+                    $q->where('user_id', $currentUserId);
+                })
+                ->whereHas('participants', function ($q) use ($senderUserId) {
+                    $q->where('user_id', $senderUserId);
+                })
+                ->first();
+
+            // Nếu chưa có cuộc trò chuyện thì tạo mới và gán 2 thành viên
+            if (!$conversation) {
+                $conversation = DB::transaction(function () use ($currentUserId, $senderUserId) {
+                    $conv = Conversation::create([
+                        'type' => 'direct',
+                    ]);
+
+                    ConversationParticipant::create([
+                        'conversation_id' => $conv->id,
+                        'user_id' => $currentUserId,
+                        'role' => 'member',
+                    ]);
+
+                    ConversationParticipant::create([
+                        'conversation_id' => $conv->id,
+                        'user_id' => $senderUserId,
+                        'role' => 'member',
+                    ]);
+
+                    return $conv;
+                });
+            }
+
+            // Phương án 1: Tự động gửi tin nhắn chào mừng nếu cuộc trò chuyện chưa có tin nhắn nào
+            if ($conversation->messages()->count() === 0) {
+                $greetingMessage = Message::create([
+                    'conversation_id' => $conversation->id,
+                    'user_id' => $currentUserId,
+                    'type' => 'text',
+                    'body' => 'Chào bạn, mình đã đồng ý lời mời kết bạn! Cùng trò chuyện và học tập nhé! 🎉',
+                ]);
+
+                $greetingMessage->load(['user', 'replyTo.user', 'reactions']);
+
+                // Cập nhật mốc tin nhắn đã đọc cho người gửi
+                $conversation->participants()
+                    ->where('user_id', $currentUserId)
+                    ->update([
+                        'last_read_message_id' => $greetingMessage->id,
+                        'last_read_at' => now(),
+                    ]);
+
+                $conversation->touch();
+
+                // Phát sự kiện realtime tin nhắn mới tới bạn bè qua Reverb
+                broadcast(new MessageSent($greetingMessage))->toOthers();
+            }
+
+            // Phát sự kiện Reverb tới người gửi lời mời ban đầu kèm conversation_id
             broadcast(new FriendshipEvent(
-                receiverId: (int)$friendship->user_id,
+                receiverId: $senderUserId,
                 action: 'request_accepted',
                 sender: [
                     'id' => Auth::id(),
@@ -197,6 +260,7 @@ class FriendshipController extends Controller
                     'email' => Auth::user()->email,
                 ],
                 friendshipId: $friendship->id,
+                conversationId: $conversation->id,
                 message: Auth::user()->name . ' đã đồng ý lời mời kết bạn của bạn.'
             ))->toOthers();
 
@@ -205,12 +269,14 @@ class FriendshipController extends Controller
                     'success' => true,
                     'message' => 'Đã đồng ý kết bạn thành công.',
                     'friendship_id' => $friendship->id,
+                    'conversation_id' => $conversation->id,
+                    'redirect_url' => route('app.chat-board.show', $conversation->id),
                 ]);
             }
 
-            return redirect()->back()->with('success', 'Đã đồng ý kết bạn thành công.');
+            return redirect()->route('app.chat-board.show', $conversation->id)->with('success', 'Đã đồng ý kết bạn thành công.');
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("Lỗi khi đồng ý kết bạn (ID: {$id}): " . $e->getMessage());
+            Log::error("Lỗi khi đồng ý kết bạn (ID: {$id}): " . $e->getMessage());
             if (request()->expectsJson()) {
                 return response()->json(['message' => 'Đã xảy ra lỗi khi đồng ý kết bạn.'], 500);
             }
